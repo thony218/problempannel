@@ -42,3 +42,16 @@ export async function findUserByEmail(db: D1Database, email: string): Promise<Ap
     .first<UserRow>();
   return row ? mapUserRow(row) : null;
 }
+
+/**
+ * Valide qu'un id de référence utilisateur soumis par un client
+ * (ownerUserId, waitingOn.userId) existe bien et est actif, même règle
+ * que findActiveReferenceById pour les référentiels (G-010).
+ */
+export async function findActiveUserById(db: D1Database, id: number): Promise<AppUser | null> {
+  const row = await db
+    .prepare(`SELECT ${USER_COLUMNS} FROM users WHERE id = ? AND active = 1`)
+    .bind(id)
+    .first<UserRow>();
+  return row ? mapUserRow(row) : null;
+}

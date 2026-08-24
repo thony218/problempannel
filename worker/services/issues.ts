@@ -2,17 +2,67 @@ import type { components } from "../../src/shared/api-types.generated";
 import { AppError } from "../domain/errors";
 import { decodeCursor, encodeCursor } from "../domain/cursor";
 import { parsePublicId } from "../domain/publicId";
-import { findActiveReferenceById, findActiveReferencesByIds } from "../db/reference";
-import { findIssueByPublicId, insertIssue, mapIssueRow, queryIssuesList, type ApiIssue } from "../db/issues";
+import { findActiveReferenceById, findActiveReferencesByIds, type ReferenceItem } from "../db/reference";
+import { findActiveUserById } from "../db/users";
+import {
+  CAUSE_STATUS_API_TO_DB,
+  PERMANENT_CORRECTION_TYPE_API_TO_DB,
+  STATUS_API_TO_DB,
+  findIssueByPublicId,
+  findIssueRowById,
+  insertIssue,
+  mapIssueRow,
+  queryIssuesList,
+  replaceIssueImpactsStatements,
+  updateIssueRow,
+  type ApiIssue,
+  type IssueColumnUpdates,
+  type IssueRow,
+} from "../db/issues";
 import { findImpactsByIssueId } from "../db/impacts";
 import { findCorrectiveActionsByIssueId } from "../db/corrective-actions";
-import type { CreateIssueInput, ListIssuesQuery } from "../validation/issues";
+import { insertHistoryEventStatement } from "../db/history";
+import { issueETag } from "../domain/etag";
+import type { CreateIssueInput, ListIssuesQuery, UpdateIssueInput } from "../validation/issues";
 
 export type IssueDetail = components["schemas"]["IssueDetail"];
 
-
 const NONE_EXTERNAL_CODE = "none_external";
 const OTHER_CODE = "other";
+
+/**
+ * Règles communes à la création et à la modification des impacts d'un
+ * dossier (01_CONTRAT_FONCTIONNEL_FINAL.md §1, 02_DICTIONNAIRE_CHAMPS.md
+ * §Impacts) : chaque type doit exister/être actif, un même type ne peut
+ * être sélectionné qu'une fois, "Autre" exige un détail, "Aucun impact
+ * externe" est exclusif. Renvoie un message d'erreur unique ou undefined.
+ */
+function validateImpactsAgainstTypes(
+  impacts: { impactTypeId: number; details?: string | null }[],
+  impactTypes: Map<number, ReferenceItem>
+): string | undefined {
+  const impactTypeIds = impacts.map((impact) => impact.impactTypeId);
+  const hasDuplicateImpactType = impactTypeIds.some((id, index) => impactTypeIds.indexOf(id) !== index);
+  if (hasDuplicateImpactType) {
+    return "Un même type d'impact ne peut être sélectionné qu'une fois.";
+  }
+  for (const impact of impacts) {
+    const impactType = impactTypes.get(impact.impactTypeId);
+    if (!impactType) {
+      return "Un type d'impact est introuvable ou inactif.";
+    }
+    if (impactType.code === OTHER_CODE && !impact.details?.trim()) {
+      return 'Un détail est requis lorsque le type d\'impact est "Autre".';
+    }
+  }
+  if (
+    impacts.length > 1 &&
+    impacts.some((impact) => impactTypes.get(impact.impactTypeId)?.code === NONE_EXTERNAL_CODE)
+  ) {
+    return '"Aucun impact externe" ne peut pas être combiné à d\'autres impacts.';
+  }
+  return undefined;
+}
 
 /**
  * Règles métier de 01_CONTRAT_FONCTIONNEL_FINAL.md (§1) et
@@ -63,29 +113,9 @@ export async function createIssue(
     }
   }
 
-  const impactTypeIds = input.impacts.map((impact) => impact.impactTypeId);
-  const hasDuplicateImpactType = impactTypeIds.some((id, index) => impactTypeIds.indexOf(id) !== index);
-  if (hasDuplicateImpactType) {
-    fields.impacts = "Un même type d'impact ne peut être sélectionné qu'une fois.";
-  } else {
-    for (const impact of input.impacts) {
-      const impactType = impactTypes.get(impact.impactTypeId);
-      if (!impactType) {
-        fields.impacts = "Un type d'impact est introuvable ou inactif.";
-        break;
-      }
-      if (impactType.code === OTHER_CODE && !impact.details?.trim()) {
-        fields.impacts = 'Un détail est requis lorsque le type d\'impact est "Autre".';
-        break;
-      }
-    }
-    if (
-      !fields.impacts &&
-      input.impacts.length > 1 &&
-      input.impacts.some((impact) => impactTypes.get(impact.impactTypeId)?.code === NONE_EXTERNAL_CODE)
-    ) {
-      fields.impacts = '"Aucun impact externe" ne peut pas être combiné à d\'autres impacts.';
-    }
+  const impactsError = validateImpactsAgainstTypes(input.impacts, impactTypes);
+  if (impactsError) {
+    fields.impacts = impactsError;
   }
 
   if (Object.keys(fields).length > 0) {
@@ -185,5 +215,226 @@ export async function getIssueDetail(db: D1Database, publicId: string): Promise<
   }
 
   return { issue, impacts, correctiveActions };
+}
+
+/**
+ * PATCH /issues/{publicId} — mécanique de concurrence optimiste (FLOW-01).
+ *
+ * Portée volontairement limitée : applique les champs fournis et garde la
+ * ligne cohérente avec les CHECK D1 (subcategory requise hors 'new',
+ * waitingOn cohérent avec 'waiting', resolvedAt/By reflète le statut). Ne
+ * met en œuvre ni la matrice de transitions (`FLOW-02`,
+ * `01_produit/03_MATRICE_TRANSITIONS.md`), ni les préconditions de
+ * résolution (`FLOW-03`), ni la règle de réouverture (`FLOW-04`), ni la
+ * permission par champ (`01_produit/04_MATRICE_PERMISSIONS.md`, couverte
+ * par `QA-01`) — tout statut est acceptable pour l'instant tant qu'il
+ * respecte les contraintes structurelles de la table, et `requireUser`
+ * (n'importe quel utilisateur actif) est la seule porte d'entrée.
+ *
+ * `null` = publicId invalide ou dossier introuvable (404 côté route,
+ * même contrat que getIssueDetail/findIssueByPublicId, cf. V4-ID-01).
+ * Lance `AppError("CONFLICT")` (409) si `ifMatch` ne correspond pas à
+ * l'ETag courant, ou si une écriture concurrente a fait avancer
+ * `row_version` entre cette lecture et l'UPDATE (revérifié au niveau SQL
+ * via `WHERE row_version = ?`, cf. `updateIssueRow`).
+ */
+export async function updateIssue(
+  db: D1Database,
+  publicId: string,
+  ifMatch: string,
+  actorUserId: number,
+  input: UpdateIssueInput
+): Promise<IssueDetail | null> {
+  const id = parsePublicId(publicId);
+  if (id === null) {
+    return null;
+  }
+
+  const current: IssueRow | null = await findIssueRowById(db, id);
+  if (!current) {
+    return null;
+  }
+
+  if (issueETag(id, current.row_version) !== ifMatch) {
+    throw new AppError("CONFLICT", "Le dossier a été modifié entretemps.");
+  }
+
+  const fields: Record<string, string> = {};
+  const columns: IssueColumnUpdates = {};
+
+  const [location, category, department, subcategory, owner, waitingUser, impactTypes] = await Promise.all([
+    input.locationId != null ? findActiveReferenceById(db, "locations", input.locationId) : Promise.resolve(undefined),
+    input.categoryId != null ? findActiveReferenceById(db, "categories", input.categoryId) : Promise.resolve(undefined),
+    input.departmentId != null
+      ? findActiveReferenceById(db, "departments", input.departmentId)
+      : Promise.resolve(undefined),
+    input.subcategoryId != null
+      ? findActiveReferenceById(db, "subcategories", input.subcategoryId)
+      : Promise.resolve(undefined),
+    input.ownerUserId != null ? findActiveUserById(db, input.ownerUserId) : Promise.resolve(undefined),
+    input.waitingOn?.type === "user" ? findActiveUserById(db, input.waitingOn.userId) : Promise.resolve(undefined),
+    input.impacts
+      ? findActiveReferencesByIds(
+          db,
+          "impact_types",
+          input.impacts.map((impact) => impact.impactTypeId)
+        )
+      : Promise.resolve(undefined),
+  ]);
+
+  if ("occurredOn" in input) columns.occurred_on = input.occurredOn;
+  if ("locationId" in input) {
+    if (!location) fields.locationId = "Succursale introuvable ou inactive.";
+    else columns.location_id = input.locationId;
+  }
+
+  const categoryTouched = "categoryId" in input;
+  if (categoryTouched) {
+    if (!category) fields.categoryId = "Catégorie introuvable ou inactive.";
+    else columns.category_id = input.categoryId;
+  }
+
+  const subcategoryTouched = "subcategoryId" in input;
+  if (subcategoryTouched) {
+    if (input.subcategoryId != null && !subcategory) fields.subcategoryId = "Sous-catégorie introuvable ou inactive.";
+    else columns.subcategory_id = input.subcategoryId ?? null;
+  }
+
+  const nextCategoryId = categoryTouched ? (category?.id ?? null) : current.category_id;
+  const nextSubcategoryId = subcategoryTouched ? (input.subcategoryId ?? null) : current.subcategory_id;
+
+  if (!fields.categoryId && !fields.subcategoryId && (categoryTouched || subcategoryTouched) && nextSubcategoryId != null) {
+    const effectiveSubcategory = subcategoryTouched
+      ? (subcategory ?? null)
+      : await findActiveReferenceById(db, "subcategories", nextSubcategoryId);
+    if (!effectiveSubcategory) {
+      fields.subcategoryId = "Sous-catégorie introuvable ou inactive.";
+    } else if (nextCategoryId != null && effectiveSubcategory.parentId !== nextCategoryId) {
+      fields.subcategoryId = "La sous-catégorie ne correspond pas à la catégorie choisie.";
+    }
+  }
+
+  if ("departmentId" in input) {
+    if (input.departmentId != null && !department) fields.departmentId = "Département introuvable ou inactif.";
+    else columns.department_id = input.departmentId ?? null;
+  }
+
+  if ("description" in input) columns.description = input.description;
+  if ("priority" in input) columns.priority = input.priority;
+
+  const statusTouched = "status" in input;
+  const nextStatusDb = statusTouched ? STATUS_API_TO_DB[input.status!] : current.status;
+  if (statusTouched) columns.status = nextStatusDb;
+
+  if (nextStatusDb !== "new" && nextSubcategoryId == null && !fields.subcategoryId) {
+    fields.subcategoryId = "Sous-catégorie requise pour sortir du statut 'new'.";
+  }
+
+  if ("ownerUserId" in input) {
+    if (input.ownerUserId != null && !owner) fields.ownerUserId = "Utilisateur introuvable ou inactif.";
+    else columns.owner_user_id = input.ownerUserId ?? null;
+  }
+
+  if ("dueDate" in input) columns.due_date = input.dueDate ?? null;
+
+  if ("causeStatus" in input) {
+    columns.cause_status = input.causeStatus ? CAUSE_STATUS_API_TO_DB[input.causeStatus] : null;
+  }
+  if ("causeSummary" in input) columns.cause_summary = input.causeSummary ?? null;
+  if ("immediateSolution" in input) columns.immediate_solution = input.immediateSolution ?? null;
+  if ("permanentCorrectionType" in input) {
+    columns.permanent_correction_type = input.permanentCorrectionType
+      ? PERMANENT_CORRECTION_TYPE_API_TO_DB[input.permanentCorrectionType]
+      : null;
+  }
+  if ("permanentCorrectionSummary" in input) columns.permanent_correction_summary = input.permanentCorrectionSummary ?? null;
+  if ("finalResult" in input) columns.final_result = input.finalResult ?? null;
+  if ("preventionLearning" in input) columns.prevention_learning = input.preventionLearning ?? null;
+  if ("effectivenessStatus" in input) columns.effectiveness_status = input.effectivenessStatus ?? null;
+  if ("effectivenessReviewDate" in input) columns.effectiveness_review_date = input.effectivenessReviewDate ?? null;
+
+  const waitingTouched = "waitingOn" in input;
+  if (waitingTouched && input.waitingOn?.type === "user" && !waitingUser) {
+    fields.waitingOn = "Utilisateur introuvable ou inactif.";
+  }
+  if (waitingTouched && !fields.waitingOn) {
+    if (input.waitingOn == null) {
+      columns.waiting_on_type = null;
+      columns.waiting_on_user_id = null;
+      columns.waiting_on_label = null;
+    } else if (input.waitingOn.type === "user") {
+      columns.waiting_on_type = "user";
+      columns.waiting_on_user_id = input.waitingOn.userId;
+      columns.waiting_on_label = input.waitingOn.label ?? null;
+    } else {
+      columns.waiting_on_type = input.waitingOn.type;
+      columns.waiting_on_user_id = null;
+      columns.waiting_on_label = input.waitingOn.label;
+    }
+  }
+
+  // Cohérence structurelle avec le CHECK D1 : status='waiting' <=> waitingOn défini.
+  if (!fields.waitingOn) {
+    if (nextStatusDb === "waiting") {
+      const hasWaiting = waitingTouched ? input.waitingOn != null : current.waiting_on_type != null;
+      if (!hasWaiting) {
+        fields.waitingOn = "Une attente (waitingOn) est requise en statut 'waiting'.";
+      }
+    } else if (waitingTouched && input.waitingOn != null) {
+      fields.waitingOn = "waitingOn n'est valide qu'en statut 'waiting'.";
+    } else if (!waitingTouched && current.waiting_on_type != null) {
+      // Le statut quitte 'waiting' sans que waitingOn ait été fourni : purge auto des 3 colonnes.
+      columns.waiting_on_type = null;
+      columns.waiting_on_user_id = null;
+      columns.waiting_on_label = null;
+    }
+  }
+
+  if (input.impacts) {
+    const impactsError = validateImpactsAgainstTypes(input.impacts, impactTypes!);
+    if (impactsError) fields.impacts = impactsError;
+  }
+
+  if (Object.keys(fields).length > 0) {
+    throw new AppError("VALIDATION_ERROR", "Validation échouée.", fields);
+  }
+
+  let touchResolvedAtNow = false;
+  let clearResolvedAt = false;
+  if (statusTouched && nextStatusDb !== current.status) {
+    if (nextStatusDb === "resolved") {
+      touchResolvedAtNow = true;
+      columns.resolved_by_user_id = actorUserId;
+    } else if (current.status === "resolved") {
+      clearResolvedAt = true;
+      columns.resolved_by_user_id = null;
+    }
+  }
+
+  const updatedRow = await updateIssueRow(db, id, current.row_version, columns, {
+    touchResolvedAtNow,
+    clearResolvedAt,
+  });
+  if (!updatedRow) {
+    throw new AppError("CONFLICT", "Le dossier a été modifié entretemps.");
+  }
+
+  const followUpStatements = input.impacts
+    ? replaceIssueImpactsStatements(
+        db,
+        id,
+        input.impacts.map((impact) => ({ impactTypeId: impact.impactTypeId, details: impact.details ?? null }))
+      )
+    : [];
+  followUpStatements.push(
+    insertHistoryEventStatement(db, id, {
+      actorUserId,
+      eventType: "issue_updated",
+      payload: { fields: Object.keys(input).sort() },
+    })
+  );
+  await db.batch(followUpStatements);
+
+  return getIssueDetail(db, publicId);
 }
 

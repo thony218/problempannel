@@ -166,6 +166,102 @@ export async function findIssueByPublicId(db: D1Database, publicId: string): Pro
   return row ? mapIssueRow(row) : null;
 }
 
+/** Ligne brute (pas de mapping API) — utilisé par le PATCH pour lire row_version/valeurs courantes. */
+export async function findIssueRowById(db: D1Database, id: number): Promise<IssueRow | null> {
+  return db.prepare(`SELECT ${ISSUE_COLUMNS} FROM issues WHERE id = ?`).bind(id).first<IssueRow>();
+}
+
+export interface IssueColumnUpdates {
+  occurred_on?: string;
+  location_id?: number;
+  department_id?: number | null;
+  category_id?: number;
+  subcategory_id?: number | null;
+  description?: string;
+  priority?: string;
+  status?: string;
+  owner_user_id?: number | null;
+  due_date?: string | null;
+  cause_status?: string | null;
+  cause_summary?: string | null;
+  immediate_solution?: string | null;
+  permanent_correction_type?: string | null;
+  permanent_correction_summary?: string | null;
+  waiting_on_type?: string | null;
+  waiting_on_user_id?: number | null;
+  waiting_on_label?: string | null;
+  final_result?: string | null;
+  prevention_learning?: string | null;
+  effectiveness_status?: string | null;
+  effectiveness_review_date?: string | null;
+  resolved_by_user_id?: number | null;
+}
+
+export interface UpdateIssueRowOptions {
+  /** `resolved_at` doit refléter le statut courant, pas une valeur soumise par le client (horloge D1, pas worker). */
+  touchResolvedAtNow?: boolean;
+  clearResolvedAt?: boolean;
+}
+
+/**
+ * UPDATE optimiste : la clause `WHERE id = ? AND row_version = ?` est le
+ * dernier rempart contre une course entre la lecture du `If-Match` côté
+ * service et cette écriture (cf. G-029-style "vérifié empiriquement, pas
+ * supposé" — un service qui ne relit qu'au préalable laisse une fenêtre
+ * ouverte). `null` si aucune ligne ne correspond (version périmée ou id
+ * disparu) : le service traduit ça en 409.
+ */
+export async function updateIssueRow(
+  db: D1Database,
+  id: number,
+  expectedRowVersion: number,
+  columns: IssueColumnUpdates,
+  options: UpdateIssueRowOptions = {}
+): Promise<IssueRow | null> {
+  const keys = Object.keys(columns) as (keyof IssueColumnUpdates)[];
+  const setClauses = keys.map((key) => `${key} = ?`);
+  const values: unknown[] = keys.map((key) => columns[key]);
+
+  if (options.touchResolvedAtNow) {
+    setClauses.push("resolved_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')");
+  } else if (options.clearResolvedAt) {
+    setClauses.push("resolved_at = NULL");
+  }
+
+  setClauses.push("row_version = row_version + 1");
+  setClauses.push("updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')");
+
+  const row = await db
+    .prepare(
+      `UPDATE issues SET ${setClauses.join(", ")} WHERE id = ? AND row_version = ? RETURNING ${ISSUE_COLUMNS}`
+    )
+    .bind(...values, id, expectedRowVersion)
+    .first<IssueRow>();
+
+  return row ?? null;
+}
+
+/**
+ * Remplace intégralement les impacts d'un dossier existant (id déjà connu,
+ * contrairement à insertIssue où l'id n'existe pas encore). `impacts` est
+ * garanti non vide par le schéma Zod (min 1) quand ce champ est fourni.
+ */
+export function replaceIssueImpactsStatements(
+  db: D1Database,
+  issueId: number,
+  impacts: NewIssueImpact[]
+): D1PreparedStatement[] {
+  const del = db.prepare("DELETE FROM issue_impacts WHERE issue_id = ?").bind(issueId);
+  const placeholders = impacts.map(() => "(?, ?, ?)").join(", ");
+  const insert = db
+    .prepare(
+      `INSERT INTO issue_impacts (issue_id, impact_type_id, details)
+       SELECT column1, column2, column3 FROM (VALUES ${placeholders})`
+    )
+    .bind(...impacts.flatMap((impact) => [issueId, impact.impactTypeId, impact.details]));
+  return [del, insert];
+}
+
 export interface NewIssueImpact {
   impactTypeId: number;
   details: string | null;
