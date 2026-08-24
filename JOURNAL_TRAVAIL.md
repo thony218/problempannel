@@ -30,7 +30,7 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 | Vague | Statut |
 |---|---|
 | Bootstrap 0 | PRESQUE TERMINÉ — il ne reste que "CI verte" (bloqué : aucun remote Git configuré) |
-| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01 + ISSUE-01 + ISSUE-02 faits ; META-02 UI, ISSUE-03+ restent) |
+| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01 + ISSUE-01/02/03 faits ; META-02 UI, ISSUE-04+ restent) |
 | Vague B — Tranches verticales | NON DÉMARRÉE |
 | Vague C | NON DÉMARRÉE |
 | Vague D | NON DÉMARRÉE |
@@ -172,5 +172,38 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 - **Prochain propriétaire** : Intégrateur (agent) ou humain.
   - `ISSUE-03` (`POST /issues`) est la suite naturelle : lire `01_produit/07_SCENARIOS_ACCEPTATION.md` (S01-S03) et `01_produit/03_MATRICE_TRANSITIONS.md` avant d'implémenter, réutiliser `STATUS_API_TO_DB`/`CAUSE_STATUS_API_TO_DB`/`PERMANENT_CORRECTION_TYPE_API_TO_DB` de `worker/db/issues.ts`, brancher `requireUser`/`requireRole` de `worker/auth/middleware.ts`, valider avec Zod dans `worker/validation/` (dossier encore vide).
   - Alternative non bloquée : `DETAIL-01` (`GET /issues/{publicId}` + ETag) ne dépend que d'`ISSUE-03` selon le backlog écrit, mais en pratique un `GET` sans `POST` au préalable n'a rien à lire en staging — mieux vaut faire `ISSUE-03` d'abord même si l'ordre strict du backlog ne l'impose pas explicitement.
+
+---
+
+### 2026-08-24 — POST /issues (ISSUE-03, S01-S03)
+
+- **Task IDs** : ISSUE-03 (`POST /issues`)
+- **Date** : 2026-08-24
+- **Owner** : Intégrateur (agent), suite directe sur demande explicite (« continue directement sur ISSUE-01/ISSUE-02 » puis enchaînement naturel sur ISSUE-03 une fois le mapper prêt).
+- **Lu avant d'implémenter** : `01_produit/07_SCENARIOS_ACCEPTATION.md` (S01-S03), `01_produit/01_CONTRAT_FONCTIONNEL_FINAL.md` (§1 Déclaration), `01_produit/02_DICTIONNAIRE_CHAMPS.md` (§Impacts : `none_external` exclusif, `other` exige `details`).
+- **Commit(s)** : voir `git log` (commit qui suit cette entrée)
+- **Fichiers produits** :
+  - `worker/validation/request.ts` — `parseJsonBody(c, schema)` générique (JSON malformé → 400 `BAD_REQUEST`, schéma Zod invalide → 422 `VALIDATION_ERROR` avec un `fields[chemin] = message` par erreur), réutilisable pour tout futur POST/PATCH.
+  - `worker/validation/issues.ts` — `createIssueRequestSchema` (Zod, miroir strict de `CreateIssueRequest` dans `contracts/openapi.yaml` : `z.strictObject` pour `additionalProperties:false`, `z.iso.date()` pour les dates civiles, mêmes bornes `min/max`).
+  - `worker/services/issues.ts` — `createIssue(db, createdByUserId, input)` : valide que `locationId`/`categoryId` existent et sont actifs, que `departmentId`/`subcategoryId` (si fournis) existent et sont actifs, que la sous-catégorie appartient bien à la catégorie choisie (`subcategory.parentId === category.id`), qu'aucun `impactTypeId` n'est dupliqué, que chaque type d'impact existe/est actif, que `other` a un `details` non vide, et que `none_external` n'est jamais combiné à un autre impact. Toutes les erreurs de champs sont accumulées et renvoyées en un seul 422 (meilleure UX qu'un aller-retour par champ).
+  - `worker/db/issues.ts` — `insertIssue()` : insertion atomique dossier+impacts en **un seul `db.batch()`** : la requête `issues` utilise `RETURNING` pour renvoyer la ligne complète (avec les valeurs par défaut SQLite : `status='new'`, `row_version=1`, `created_at`/`updated_at`), et les requêtes `issue_impacts` référencent l'id généré via `last_insert_rowid()` **en SQL** plutôt qu'un id relu puis re-bindé côté application — ce qui évite toute fenêtre non atomique entre les deux écritures (D1 ne permet pas de transaction pilotée par l'application avec lecture intermédiaire, seulement `db.batch()`). **Cette hypothèse a été vérifiée empiriquement** (pas supposée) : le test "persists the issue and its impacts atomically" confirme qu'après un seul appel à l'endpoint, le dossier ET ses impacts sont bien présents et cohérents sur le D1 réel (Miniflare, même moteur que `wrangler dev`).
+  - `worker/db/reference.ts` — ajout de `findActiveReferenceById` et `findActiveReferencesByIds` (validations d'existence/activité, utilisées par le service ci-dessus).
+  - `worker/domain/etag.ts` — `issueETag(id, rowVersion)` = `"issue-{id}-v{rowVersion}"` (`02_contrats/03_CONTRAT_API.md`). Nécessaire dès `ISSUE-03` (pas seulement `DETAIL-01`) car le contrat OpenAPI exige un en-tête `ETag` sur la réponse `201` de `POST /issues`, pas seulement sur `GET`/`PATCH`.
+  - `worker/routes/issues.ts` — `POST /issues` : `requireUser` (n'importe quel utilisateur actif peut créer, cf. matrice de permissions : "Créer issue: oui/oui/oui"), parse+valide le corps, appelle le service, pose l'en-tête `ETag`, répond `201` avec l'enveloppe `{ok:true,data:Issue}`.
+  - Tests (`tests/api/issues-create.test.ts`, 15 cas) : **S01** (création valide + `ETag` + `status=new` + `rowVersion=1`), **S02** (sans `locationId` → 422), succursale inactive → 422, **S03** (sans sous-catégorie → accepté), sous-catégorie valide acceptée, sous-catégorie d'une autre catégorie refusée, description trop courte, `impacts` vide refusé, `impactTypeId` dupliqué refusé, `none_external` combiné refusé, `other` sans détail refusé puis accepté avec détail, atomicité dossier+impacts vérifiée en relisant D1 directement, champ hors schéma refusé (`additionalProperties:false`), 401 sans identité.
+- **Commandes exécutées** :
+  - `npm run typecheck:worker` → OK
+  - `npx vitest run tests/api/issues-create.test.ts` → 15/15 (1 échec initial dû à un mauvais fixture de test — `"trop court"` fait exactement 10 caractères donc passe `minLength:10` — corrigé dans le test, pas dans le code)
+  - `npm run verify` (from clean) → **exit 0**, **46/46 tests** (10 fichiers)
+- **`npm run verify`** : **PASS** (exit 0)
+- **Staging testé** : non.
+- **Limitations connues / dette** :
+  - Pas d'écriture dans `issue_history` (`issue_created`) — c'est explicitement `ISSUE-04`, tâche suivante, avec sa propre preuve ("event test"). Ne pas confondre avec "fait".
+  - Pas de rate limiting appliqué sur cette route d'écriture (`WRITE_RATE_LIMIT` existe dans `wrangler.jsonc` mais n'est câblé sur aucune route — reste `OPS-03`/futur, cf. entrée précédente).
+  - `UpdateIssueRequest` (PATCH) n'est pas traité ici — c'est `FLOW-01`. Les tables de correspondance d'énumération API→DB dans `worker/db/issues.ts` sont déjà prêtes à être réutilisées par ce futur endpoint.
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : Intégrateur (agent) ou humain.
+  - `ISSUE-04` (historique `issue_created`) est la suite la plus naturelle : append-only dans `issue_history` (`event_type='issue_created'`, `payload_json` — attention à `S35` : ne jamais recopier de texte libre modifiable dans `payload_json`, seulement des métadonnées structurelles), appelé depuis `worker/services/issues.ts::createIssue` dans le même `db.batch()` que l'insertion (à vérifier si `RETURNING`+`last_insert_rowid()` combiné à un 3e type de statement pose un problème — probablement pas, mais à tester comme cette entrée l'a fait pour issues+impacts).
+  - Ensuite `ISSUE-05`/`ISSUE-06`/`ISSUE-07` sont du frontend (formulaire mobile + brouillon IndexedDB + intégration staging) — nécessitent `META-02` (bootstrap UI) au préalable, qui lui-même ne dépend que d'`AUTH-05`+`META-01` (déjà faits) et peut donc être fait en parallèle si un autre worker préfère attaquer le frontend plutôt que de continuer le backend `ISSUE-*`.
 
 ---

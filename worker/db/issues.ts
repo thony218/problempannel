@@ -164,3 +164,63 @@ export async function findIssueByPublicId(db: D1Database, publicId: string): Pro
   const row = await db.prepare(`SELECT ${ISSUE_COLUMNS} FROM issues WHERE id = ?`).bind(id).first<IssueRow>();
   return row ? mapIssueRow(row) : null;
 }
+
+export interface NewIssueImpact {
+  impactTypeId: number;
+  details: string | null;
+}
+
+export interface NewIssueInput {
+  occurredOn: string;
+  createdByUserId: number;
+  locationId: number;
+  departmentId: number | null;
+  categoryId: number;
+  subcategoryId: number | null;
+  description: string;
+  priority: string;
+  impacts: NewIssueImpact[];
+}
+
+/**
+ * Insertion atomique du dossier + ses impacts en un seul db.batch()
+ * (02_CONTRAT_D1.md : "opérations D1 transactionnelles/batch lorsque la
+ * cohérence l'exige"). Le batch entier tourne dans une seule transaction
+ * D1 ; les inserts d'impacts référencent l'id généré via
+ * last_insert_rowid() en SQL plutôt qu'un id lu puis rebinding par
+ * l'application, ce qui évite une fenêtre non atomique entre les deux
+ * requêtes. La première instruction utilise RETURNING pour renvoyer la
+ * ligne complète (avec les valeurs par défaut calculées par SQLite :
+ * status, row_version, created_at, updated_at).
+ */
+export async function insertIssue(db: D1Database, input: NewIssueInput): Promise<ApiIssue> {
+  const issueInsert = db
+    .prepare(
+      `INSERT INTO issues (occurred_on, created_by_user_id, location_id, department_id, category_id, subcategory_id, description, priority)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       RETURNING ${ISSUE_COLUMNS}`
+    )
+    .bind(
+      input.occurredOn,
+      input.createdByUserId,
+      input.locationId,
+      input.departmentId,
+      input.categoryId,
+      input.subcategoryId,
+      input.description,
+      input.priority
+    );
+
+  const impactInserts = input.impacts.map((impact) =>
+    db
+      .prepare(
+        `INSERT INTO issue_impacts (issue_id, impact_type_id, details)
+         SELECT last_insert_rowid(), ?, ?`
+      )
+      .bind(impact.impactTypeId, impact.details)
+  );
+
+  const results = await db.batch([issueInsert, ...impactInserts]);
+  const row = results[0].results[0] as IssueRow;
+  return mapIssueRow(row);
+}

@@ -3,6 +3,7 @@ import type { AppEnv } from "./domain/types";
 import { AppError, errorBody, okBody } from "./domain/errors";
 import { sessionRoutes } from "./routes/session";
 import { metaRoutes } from "./routes/meta";
+import { issueRoutes } from "./routes/issues";
 
 export const app = new Hono<AppEnv>();
 
@@ -23,5 +24,6 @@ app.onError((err, c) => {
 app.get("/api/health", (c) => c.json(okBody({ status: "ok" })));
 app.route("/api", sessionRoutes);
 app.route("/api", metaRoutes);
+app.route("/api", issueRoutes);
 
 export default app;
