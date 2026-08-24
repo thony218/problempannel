@@ -30,7 +30,7 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 | Vague | Statut |
 |---|---|
 | Bootstrap 0 | PRESQUE TERMINÉ — il ne reste que "CI verte" (bloqué : aucun remote Git configuré) |
-| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01 + ISSUE-01/02/03 faits ; META-02 UI, ISSUE-04+ restent) |
+| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01 + ISSUE-01/02/03/04 faits ; META-02 UI, ISSUE-05+ restent) |
 | Vague B — Tranches verticales | NON DÉMARRÉE |
 | Vague C | NON DÉMARRÉE |
 | Vague D | NON DÉMARRÉE |
@@ -205,5 +205,35 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 - **Prochain propriétaire** : Intégrateur (agent) ou humain.
   - `ISSUE-04` (historique `issue_created`) est la suite la plus naturelle : append-only dans `issue_history` (`event_type='issue_created'`, `payload_json` — attention à `S35` : ne jamais recopier de texte libre modifiable dans `payload_json`, seulement des métadonnées structurelles), appelé depuis `worker/services/issues.ts::createIssue` dans le même `db.batch()` que l'insertion (à vérifier si `RETURNING`+`last_insert_rowid()` combiné à un 3e type de statement pose un problème — probablement pas, mais à tester comme cette entrée l'a fait pour issues+impacts).
   - Ensuite `ISSUE-05`/`ISSUE-06`/`ISSUE-07` sont du frontend (formulaire mobile + brouillon IndexedDB + intégration staging) — nécessitent `META-02` (bootstrap UI) au préalable, qui lui-même ne dépend que d'`AUTH-05`+`META-01` (déjà faits) et peut donc être fait en parallèle si un autre worker préfère attaquer le frontend plutôt que de continuer le backend `ISSUE-*`.
+
+---
+
+### 2026-08-24 — Historique issue_created (ISSUE-04) + correctif d'un bug réel dans l'insert atomique
+
+- **Task IDs** : ISSUE-04 (historique `issue_created`), + correctif critique dans `insertIssue` (touche `ISSUE-03`)
+- **Date** : 2026-08-24
+- **Owner** : Intégrateur (agent), sur demande explicite (« continue sur ISSUE-04 »).
+- **Bug réel trouvé en commençant ISSUE-04 (avant tout nouveau code)** : `insertIssue()` (`worker/db/issues.ts`, écrit dans l'entrée `ISSUE-03`) insérait chaque impact dans **une instruction séparée**, chacune utilisant `last_insert_rowid()`. Cette fonction reflète le **dernier** insert sur la connexion — donc avec 2+ impacts, le 2e insert d'impact aurait utilisé l'id généré par le 1er impact comme `issue_id`, pas l'id du dossier. Les 15 tests d'`ISSUE-03` ne l'ont jamais détecté car **tous** leurs payloads n'utilisaient qu'un seul impact (le seul cas où `last_insert_rowid()` reste correct, puisque l'insert d'impact suit immédiatement l'insert du dossier). Non détecté par `npm run verify` non plus, puisque les tests eux-mêmes ne couvraient pas ce cas.
+  - **Correctif** : les impacts sont maintenant insérés en **une seule instruction multi-lignes** (`INSERT ... SELECT ... FROM (VALUES (?,?), (?,?), ...)`), qui ne dépend que d'**une seule** évaluation de `(SELECT id FROM issues ORDER BY id DESC LIMIT 1)` — sûr parce qu'un `db.batch()` D1 est une transaction atomique (aucune autre écriture concurrente ne peut s'intercaler), donc "le dossier au plus grand id" désigne forcément et uniquement celui qu'on vient de créer, peu importe combien d'autres inserts (impacts, historique) suivent dans le même batch.
+  - **Détail SQL piégeux découvert au passage** : la syntaxe `FROM (VALUES (?,?), (?,?)) AS v(col1, col2)` (nommage de colonnes standard SQL) **n'est pas supportée par SQLite/D1** — erreur `D1_ERROR: near "(": syntax error`. Vérifié par un `wrangler d1 execute --local` direct (pas juste supposé). Il faut utiliser les noms de colonnes par défaut que SQLite assigne (`column1`, `column2`, ...).
+  - **Test de régression ajouté** : `tests/api/issues-create.test.ts` a maintenant un cas avec **3 impacts distincts**, qui vérifie explicitement qu'aucune ligne `issue_impacts` ne pointe vers un `issue_id` différent de celui du dossier créé (`orphanCount` = 0). Ce test aurait échoué avec l'ancien code.
+- **Fichiers produits** :
+  - `worker/db/history.ts` — `insertHistoryEventStatement(db, issueId, event)` (cas général : id déjà connu, ex. futur `PATCH`) et `insertHistoryEventForJustCreatedIssueStatement(db, event)` (cas spécifique à la création, même sous-requête `ORDER BY id DESC LIMIT 1` que pour les impacts). `NewHistoryEvent.payload` documenté comme strictement structurel (jamais de texte libre, cf. `01_produit/09_CAVIARDAGE_ET_HISTORIQUE.md`).
+  - `worker/db/issues.ts` — `insertIssue()` réécrit : 3 instructions dans un seul `db.batch()` (dossier avec `RETURNING`, impacts en une seule requête multi-lignes, historique `issue_created`). Le payload de l'événement contient `locationId`, `departmentId`, `categoryId`, `subcategoryId`, `priority` — jamais `description` (texte libre).
+  - Tests ajoutés à `tests/api/issues-create.test.ts` : régression multi-impacts (ci-dessus) et vérification de l'événement `issue_created` (bon `actorUserId`, `eventType`, payload structurel exact, absence du texte de la description dans le payload sérialisé).
+- **Commandes exécutées** :
+  - `npx wrangler d1 execute DB --local --command="SELECT column1, column2 FROM (VALUES (1,2),(3,4));"` → confirme la syntaxe SQLite correcte avant de l'utiliser dans le code
+  - `npm run typecheck:worker` → OK
+  - `npx vitest run tests/api/issues-create.test.ts` → 17/17 (7 échecs intermédiaires pendant le débogage de la syntaxe SQL, tous corrigés avant ce résultat)
+  - `npm run verify` (from clean) → **exit 0**, **48/48 tests** (10 fichiers)
+- **`npm run verify`** : **PASS** (exit 0)
+- **Staging testé** : non. Note : la vérification manuelle sur le vrai D1 local (`wrangler d1 execute --local`) n'a pu être refaite après le `rm -rf .wrangler` du cycle "verify from clean" (état local éphémère, normal) — la confiance repose sur Miniflare (même moteur D1/SQLite que `wrangler dev`) plus le test direct de la syntaxe `VALUES` fait séparément ci-dessus.
+- **Limitations connues / dette** :
+  - Aucune — `ISSUE-04` est maintenant complet pour le flux de création. Les futurs endpoints d'écriture (`PATCH /issues/{publicId}`, commentaires, actions correctives, pièces jointes, liens) devront chacun ajouter leur propre événement d'historique via `insertHistoryEventStatement` (id déjà connu dans ces cas, pas besoin de la variante "just created").
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : Intégrateur (agent) ou humain.
+  - Le cœur `ISSUE-*` de création est maintenant complet et testé (mapper, publicId, création, historique). Suite naturelle côté backend : `LIST-01`/`LIST-02` (pagination curseur + `GET /issues` avec filtres) ou `DETAIL-01` (`GET /issues/{publicId}` + ETag, réutilise directement `findIssueByPublicId` déjà écrit).
+  - Alternative côté frontend : `META-02` (bootstrap session/meta UI) ne dépend que de travail déjà fait (`AUTH-05`, `META-01`) et peut démarrer indépendamment.
+  - **Rappel méthodologique pour la suite** : quand une requête D1 combine plusieurs statements dans un même `db.batch()` avec une dépendance entre eux (ex: enfant qui a besoin de l'id généré par le parent), ne jamais supposer qu'une construction SQL "standard" fonctionne sous SQLite — la valider par un `wrangler d1 execute --local` direct avant de l'intégrer, et écrire un test avec **au moins 2 lignes enfants** pour détecter une dérive de `last_insert_rowid()` comme celle corrigée ici.
 
 ---

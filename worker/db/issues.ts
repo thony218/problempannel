@@ -1,5 +1,6 @@
 import type { components } from "../../src/shared/api-types.generated";
 import { parsePublicId, toPublicId } from "../domain/publicId";
+import { insertHistoryEventForJustCreatedIssueStatement } from "./history";
 
 export type ApiIssue = components["schemas"]["Issue"];
 export type ApiIssueStatus = components["schemas"]["IssueStatus"];
@@ -183,15 +184,25 @@ export interface NewIssueInput {
 }
 
 /**
- * Insertion atomique du dossier + ses impacts en un seul db.batch()
- * (02_CONTRAT_D1.md : "opérations D1 transactionnelles/batch lorsque la
- * cohérence l'exige"). Le batch entier tourne dans une seule transaction
- * D1 ; les inserts d'impacts référencent l'id généré via
- * last_insert_rowid() en SQL plutôt qu'un id lu puis rebinding par
- * l'application, ce qui évite une fenêtre non atomique entre les deux
- * requêtes. La première instruction utilise RETURNING pour renvoyer la
- * ligne complète (avec les valeurs par défaut calculées par SQLite :
- * status, row_version, created_at, updated_at).
+ * Insertion atomique du dossier + ses impacts + l'événement d'historique
+ * `issue_created` en un seul db.batch() (02_CONTRAT_D1.md : "opérations
+ * D1 transactionnelles/batch lorsque la cohérence l'exige").
+ *
+ * Les inserts enfants (impacts, historique) retrouvent l'id du dossier
+ * via `(SELECT id FROM issues ORDER BY id DESC LIMIT 1)` plutôt que
+ * `last_insert_rowid()` : ce dernier change dès qu'une AUTRE instruction
+ * du même batch insère une ligne (ex: le 2e impact verrait l'id généré
+ * par le 1er impact, pas celui du dossier — bug réel trouvé et corrigé
+ * ici, voir JOURNAL_TRAVAIL.md). La sous-requête est sûre parce qu'un
+ * batch D1 est une transaction atomique : aucune autre écriture ne peut
+ * s'intercaler, donc "le dossier au plus grand id" désigne forcément
+ * celui qu'on vient de créer, peu importe l'ordre des statements enfants.
+ * Les impacts sont insérés en une seule instruction multi-lignes (VALUES)
+ * pour ne dépendre que d'une seule évaluation de cette sous-requête.
+ *
+ * La première instruction utilise RETURNING pour renvoyer la ligne
+ * complète (avec les valeurs par défaut calculées par SQLite : status,
+ * row_version, created_at, updated_at).
  */
 export async function insertIssue(db: D1Database, input: NewIssueInput): Promise<ApiIssue> {
   const issueInsert = db
@@ -211,16 +222,31 @@ export async function insertIssue(db: D1Database, input: NewIssueInput): Promise
       input.priority
     );
 
-  const impactInserts = input.impacts.map((impact) =>
-    db
-      .prepare(
-        `INSERT INTO issue_impacts (issue_id, impact_type_id, details)
-         SELECT last_insert_rowid(), ?, ?`
-      )
-      .bind(impact.impactTypeId, impact.details)
-  );
+  // SQLite ne supporte pas la syntaxe standard "AS v(col1, col2)" pour
+  // nommer les colonnes d'une table dérivée VALUES(...) : on utilise donc
+  // les noms de colonnes par défaut column1/column2 qu'il assigne lui-même.
+  const impactValuesPlaceholders = input.impacts.map(() => "(?, ?)").join(", ");
+  const impactsInsert = db
+    .prepare(
+      `INSERT INTO issue_impacts (issue_id, impact_type_id, details)
+       SELECT (SELECT id FROM issues ORDER BY id DESC LIMIT 1), column1, column2
+       FROM (VALUES ${impactValuesPlaceholders})`
+    )
+    .bind(...input.impacts.flatMap((impact) => [impact.impactTypeId, impact.details]));
 
-  const results = await db.batch([issueInsert, ...impactInserts]);
+  const historyInsert = insertHistoryEventForJustCreatedIssueStatement(db, {
+    actorUserId: input.createdByUserId,
+    eventType: "issue_created",
+    payload: {
+      locationId: input.locationId,
+      departmentId: input.departmentId,
+      categoryId: input.categoryId,
+      subcategoryId: input.subcategoryId,
+      priority: input.priority,
+    },
+  });
+
+  const results = await db.batch([issueInsert, impactsInsert, historyInsert]);
   const row = results[0].results[0] as IssueRow;
   return mapIssueRow(row);
 }

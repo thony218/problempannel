@@ -23,6 +23,7 @@ let impactOtherId: number;
 
 beforeEach(async () => {
   await env.DB.batch([
+    env.DB.prepare("DELETE FROM issue_history"),
     env.DB.prepare("DELETE FROM issue_impacts"),
     env.DB.prepare("DELETE FROM issues"),
     env.DB.prepare("DELETE FROM users"),
@@ -195,6 +196,80 @@ describe("POST /api/issues", () => {
       .bind(idRow!.id)
       .first<{ n: number }>();
     expect(impactCount?.n).toBe(1);
+    expect(body.data.publicId).toContain(String(idRow!.id).padStart(6, "0"));
+  });
+
+  it("links every impact to the created issue, not to each other (regression: last_insert_rowid drift)", async () => {
+    const impactWaterId = (
+      await env.DB.prepare(
+        "INSERT INTO impact_types (code, label) VALUES ('client_delay', 'Retard client') RETURNING id"
+      ).first<{ id: number }>()
+    )!.id;
+
+    const res = await post(
+      validPayload({
+        impacts: [
+          { impactTypeId: impactTimeLostId, details: "Un" },
+          { impactTypeId: impactWaterId, details: "Deux" },
+          { impactTypeId: impactOtherId, details: "Trois" },
+        ],
+      })
+    );
+    expect(res.status).toBe(201);
+
+    const idRow = await env.DB.prepare("SELECT id FROM issues ORDER BY id DESC LIMIT 1").first<{ id: number }>();
+    const { results } = await env.DB.prepare(
+      "SELECT impact_type_id, details FROM issue_impacts WHERE issue_id = ? ORDER BY id"
+    )
+      .bind(idRow!.id)
+      .all<{ impact_type_id: number; details: string }>();
+
+    expect(results).toHaveLength(3);
+    expect(results.map((r) => r.impact_type_id).sort()).toEqual(
+      [impactTimeLostId, impactWaterId, impactOtherId].sort()
+    );
+
+    // Aucune ligne issue_impacts ne doit avoir été mal rattachée à une
+    // AUTRE ligne issue_impacts (ce qui arrivait avec last_insert_rowid()
+    // dès le 2e impact).
+    const orphanCount = await env.DB.prepare(
+      "SELECT count(*) as n FROM issue_impacts WHERE issue_id != ?"
+    )
+      .bind(idRow!.id)
+      .first<{ n: number }>();
+    expect(orphanCount?.n).toBe(0);
+  });
+
+  it("ISSUE-04 — records an issue_created history event atomically with the issue", async () => {
+    const res = await post(validPayload());
+    expect(res.status).toBe(201);
+    const body = await res.json<{ data: { publicId: string } }>();
+
+    const idRow = await env.DB.prepare("SELECT id FROM issues ORDER BY id DESC LIMIT 1").first<{ id: number }>();
+    const event = await env.DB.prepare(
+      "SELECT actor_user_id, event_type, payload_json FROM issue_history WHERE issue_id = ?"
+    )
+      .bind(idRow!.id)
+      .first<{ actor_user_id: number; event_type: string; payload_json: string }>();
+
+    expect(event).not.toBeNull();
+    expect(event?.event_type).toBe("issue_created");
+
+    const creator = await env.DB.prepare("SELECT id FROM users WHERE email = 'creator@example.test'").first<{
+      id: number;
+    }>();
+    expect(event?.actor_user_id).toBe(creator!.id);
+
+    const payload = JSON.parse(event!.payload_json) as Record<string, unknown>;
+    expect(payload).toEqual({
+      locationId,
+      departmentId: null,
+      categoryId,
+      subcategoryId: null,
+      priority: "normal",
+    });
+    // L'historique ne doit jamais contenir de texte libre (description).
+    expect(JSON.stringify(payload)).not.toContain("Description suffisamment longue");
     expect(body.data.publicId).toContain(String(idRow!.id).padStart(6, "0"));
   });
 
