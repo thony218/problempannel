@@ -1,8 +1,14 @@
+import type { components } from "../../src/shared/api-types.generated";
 import { AppError } from "../domain/errors";
 import { decodeCursor, encodeCursor } from "../domain/cursor";
+import { parsePublicId } from "../domain/publicId";
 import { findActiveReferenceById, findActiveReferencesByIds } from "../db/reference";
-import { insertIssue, mapIssueRow, queryIssuesList, type ApiIssue } from "../db/issues";
+import { findIssueByPublicId, insertIssue, mapIssueRow, queryIssuesList, type ApiIssue } from "../db/issues";
+import { findImpactsByIssueId } from "../db/impacts";
+import { findCorrectiveActionsByIssueId } from "../db/corrective-actions";
 import type { CreateIssueInput, ListIssuesQuery } from "../validation/issues";
+
+export type IssueDetail = components["schemas"]["IssueDetail"];
 
 
 const NONE_EXTERNAL_CODE = "none_external";
@@ -155,5 +161,29 @@ export async function listIssues(
     nextCursor,
     hasMore: result.hasMore,
   };
+}
+
+/**
+ * `null` couvre à la fois un format `publicId` invalide et un id inconnu
+ * (`findIssueByPublicId` renvoie déjà `null` dans les deux cas) : le
+ * routeur répond 404 sans distinguer les deux, cf. `V4-ID-01`.
+ */
+export async function getIssueDetail(db: D1Database, publicId: string): Promise<IssueDetail | null> {
+  const id = parsePublicId(publicId);
+  if (id === null) {
+    return null;
+  }
+
+  const [issue, impacts, correctiveActions] = await Promise.all([
+    findIssueByPublicId(db, publicId),
+    findImpactsByIssueId(db, id),
+    findCorrectiveActionsByIssueId(db, id),
+  ]);
+
+  if (!issue) {
+    return null;
+  }
+
+  return { issue, impacts, correctiveActions };
 }
 

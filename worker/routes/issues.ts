@@ -1,12 +1,12 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../domain/types";
-import { okBody } from "../domain/errors";
+import { AppError, okBody } from "../domain/errors";
 import { issueETag } from "../domain/etag";
 import { parsePublicId } from "../domain/publicId";
 import { requireUser } from "../auth/middleware";
 import { parseJsonBody, parseQueryParams } from "../validation/request";
 import { createIssueRequestSchema, listIssuesQuerySchema } from "../validation/issues";
-import { createIssue, listIssues } from "../services/issues";
+import { createIssue, getIssueDetail, listIssues } from "../services/issues";
 
 export const issueRoutes = new Hono<AppEnv>();
 
@@ -14,6 +14,15 @@ issueRoutes.get("/issues", requireUser, async (c) => {
   const query = parseQueryParams(c, listIssuesQuerySchema);
   const result = await listIssues(c.env.DB, query);
   return c.json(okBody(result), 200);
+});
+
+issueRoutes.get("/issues/:publicId", requireUser, async (c) => {
+  const detail = await getIssueDetail(c.env.DB, c.req.param("publicId"));
+  if (!detail) {
+    throw new AppError("NOT_FOUND", "Dossier introuvable.");
+  }
+  c.header("ETag", issueETag(parsePublicId(detail.issue.publicId) as number, detail.issue.rowVersion));
+  return c.json(okBody(detail), 200);
 });
 
 issueRoutes.post("/issues", requireUser, async (c) => {

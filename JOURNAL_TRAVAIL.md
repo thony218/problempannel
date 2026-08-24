@@ -30,7 +30,7 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 | Vague | Statut |
 |---|---|
 | Bootstrap 0 | PRESQUE TERMINÉ — il ne reste que "CI verte" (bloqué : aucun remote Git configuré) |
-| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01 + ISSUE-01/02/03/04 faits ; META-02 UI, ISSUE-05+ restent) |
+| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01 + ISSUE-01/02/03/04 + LIST-01/02/03 + DETAIL-01 faits ; META-02 UI, ISSUE-05+, FLOW-* restent) |
 | Vague B — Tranches verticales | NON DÉMARRÉE |
 | Vague C | NON DÉMARRÉE |
 | Vague D | NON DÉMARRÉE |
@@ -269,6 +269,36 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 - **Prochain propriétaire** : Intégrateur (agent) ou humain.
   - Côté backend : `DETAIL-01` (`GET /issues/{publicId}` + ETag) suivi de `FLOW-01` à `FLOW-04` (`PATCH /issues/{publicId}`, `If-Match`, gestion des conflits 409 et matrice de transitions).
   - Côté frontend : `META-02` (Bootstrap React / Auth / Meta) pour démarrer l'UI, suivi de `ISSUE-05` (Formulaire Nouveau) et `LIST-04` (Écran Registre mobile).
+
+---
+
+### 2026-08-24 — GET /issues/{publicId} + ETag (DETAIL-01)
+
+- **Task IDs** : DETAIL-01 (`GET /issues/{publicId}` + ETag)
+- **Date** : 2026-08-24
+- **Owner** : Intégrateur (agent), sur choix explicite de l'utilisateur entre `DETAIL-01` (backend) et `META-02` (frontend) — `DETAIL-01` retenu.
+- **Lu avant d'implémenter** : `contracts/openapi.yaml` (`IssueDetailResponse`/`IssueDetail`/`Impact`/`CorrectiveAction`), `02_contrats/03_CONTRAT_API.md` (format `ETag`), `migrations/0001_core.sql` (tables `issue_impacts`, `corrective_actions`).
+- **Commit(s)** : voir `git log` (commit qui suit cette entrée)
+- **Fichiers produits/modifiés** :
+  - `worker/db/impacts.ts` — `findImpactsByIssueId(db, issueId)` : lecture `issue_impacts`, mapping direct vers `Impact` API (`{id, impactTypeId, details}`).
+  - `worker/db/corrective-actions.ts` — `findCorrectiveActionsByIssueId(db, issueId)` : lecture `corrective_actions`, mapping D1→API (`issue_id`→`issuePublicId` via `toPublicId`, `status` D1↔API comme pour `issues`, `blocks_issue_closure` 0/1→boolean). Aucun endpoint d'écriture n'existe encore pour cette table (`ACT-01`+), mais la table elle-même existe depuis `FND-08` : ce lot ne fait que la lire.
+  - `worker/services/issues.ts` — `getIssueDetail(db, publicId)` : parse le `publicId`, lit en parallèle (`Promise.all`) le dossier + ses impacts + ses actions correctives par id numérique, renvoie `null` si format invalide ou dossier inconnu (même contrat que `findIssueByPublicId`, pas de distinction 404 entre les deux cas côté route, cf. `V4-ID-01`).
+  - `worker/routes/issues.ts` — `GET /issues/:publicId` : `requireUser`, 404 `NOT_FOUND` si `getIssueDetail` renvoie `null`, sinon en-tête `ETag: issue-{id}-v{rowVersion}` + 200 `{ok:true,data:IssueDetail}`.
+  - Tests (`tests/api/issues-detail.test.ts`, 5 cas) : 401 non authentifié, 404 publicId bien formé mais inconnu, 404 publicId malformé, 200 avec impacts + `ETag` correct + `correctiveActions` vide, 200 avec une action corrective insérée directement en D1 (contournement propre de l'absence d'endpoint d'écriture) et retrouvée mappée correctement dans la réponse.
+- **Bug de test trouvé en cours de route (pas un bug produit)** : le fixture de test utilisait `priority: "medium"`, valeur qui n'existe pas dans l'enum `Priority` du contrat (`normal`/`important`/`urgent`) — corrigé dans le test, la validation 422 a fonctionné comme attendu et a révélé l'erreur immédiatement.
+- **Commandes exécutées** :
+  - `npm run typecheck:worker`, `npm run typecheck:test` → OK
+  - `npx vitest run tests/api/issues-detail.test.ts` → 5/5 (1 échec initial dû au fixture `priority` invalide, corrigé)
+  - `npm run verify` (from clean) → **exit 0**, **72/72 tests** (13 fichiers)
+- **`npm run verify`** : **PASS** (exit 0)
+- **Staging testé** : non.
+- **Limitations connues / dette** :
+  - `PATCH /issues/{publicId}` (`If-Match`/conflits 409/transitions) n'existe pas encore — c'est `FLOW-01..04`, qui réutilisera `issueETag`/`findIssueByPublicId` déjà écrits.
+  - `corrective_actions` n'a toujours aucun endpoint d'écriture (`ACT-01`/`ACT-02`) : la table est lue mais jamais peuplée par l'API elle-même pour l'instant, uniquement testée via insertion D1 directe.
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : Intégrateur (agent) ou humain.
+  - Côté backend : `FLOW-01` (`PATCH /issues/{publicId}` avec `If-Match`, 409/428) est la suite naturelle — réutilise `issueETag`, `findIssueByPublicId`, et les tables de correspondance d'énumération déjà exportées dans `worker/db/issues.ts`. Lire `01_produit/03_MATRICE_TRANSITIONS.md` avant d'implémenter (16 cellules à couvrir, cf. `FLOW-02`).
+  - Côté frontend : `META-02` reste non démarrée et non bloquée (dépend seulement d'`AUTH-05`+`META-01`, déjà faits).
 
 ---
 
