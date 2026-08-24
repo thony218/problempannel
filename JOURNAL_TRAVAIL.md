@@ -30,7 +30,7 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 | Vague | Statut |
 |---|---|
 | Bootstrap 0 | PRESQUE TERMINÉ — il ne reste que "CI verte" (bloqué : aucun remote Git configuré) |
-| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01 faits ; META-02 UI et ISSUE-01+ restent) |
+| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01 + ISSUE-01 + ISSUE-02 faits ; META-02 UI, ISSUE-03+ restent) |
 | Vague B — Tranches verticales | NON DÉMARRÉE |
 | Vague C | NON DÉMARRÉE |
 | Vague D | NON DÉMARRÉE |
@@ -143,5 +143,34 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
   - `META-02` (bootstrap session/meta côté UI React : appeler `/me`+`/meta`, gérer 401/403/loading) — dépend de `AUTH-05`+`META-01`, tous deux faits ici.
   - `ISSUE-01`/`ISSUE-02` (mapper D1↔API Issue, générer `publicId` à partir de `issues.id`) peuvent démarrer en parallèle (dépendent de `FND-08`, déjà fait) sans attendre `META-02`.
   - Rappel : `PublicId` est déjà défini dans `contracts/openapi.yaml` (`^INC-[0-9]{6,}$`, ex. `INC-000042`) — `ISSUE-02` n'a qu'à implémenter le formatage/parsing, pas à redéfinir le format.
+
+---
+
+### 2026-08-24 — publicId + mapper D1↔API Issue (ISSUE-01, ISSUE-02)
+
+- **Task IDs** : ISSUE-02 (générer/résoudre `publicId`), ISSUE-01 (mapper D1↔API Issue), + un correctif sur META-01
+- **Date** : 2026-08-24
+- **Owner** : Intégrateur (agent), suite directe de l'entrée précédente sur demande explicite de l'utilisateur (« continue directement sur ISSUE-01/ISSUE-02 »).
+- **Commit(s)** : voir `git log` (commit qui suit cette entrée)
+- **Correctif avant de commencer** : `worker/db/reference.ts` ne renvoyait jamais `ReferenceItem.parentId`, alors que le schéma OpenAPI le prévoit précisément pour que les sous-catégories s'associent à leur catégorie côté UI (`subcategories.category_id` → `parentId`). Sans ça, `META-01` était incomplet en pratique même si `npm run verify` passait (le champ est optionnel dans le schéma, donc son absence ne cassait aucun test). Corrigé : `listActiveReferences` accepte maintenant une colonne parent par table (seule `subcategories` en a une), `tests/api/meta.test.ts` vérifie que `parentId` d'une sous-catégorie correspond bien à l'id de sa catégorie et que les tables sans parent ne renvoient pas le champ.
+- **Fichiers produits** :
+  - `worker/domain/publicId.ts` — `toPublicId(id)` (`INC-` + id paddé à 6 chiffres minimum) et `parsePublicId(publicId)` **strict** : recalcule la forme canonique et rejette toute variante non canonique (ex. `INC-0000042` pour l'id 42), tout format non numérique, moins de 6 chiffres, ou id ≤ 0 → `null` (donc 404 en amont, cf. `V4-ID-01`).
+  - `worker/db/issues.ts` — `mapIssueRow(row): ApiIssue` (D1→API uniquement, voir décision de portée ci-dessous), tables de correspondance d'énumérations bidirectionnelles (`STATUS_API_TO_DB`, `CAUSE_STATUS_API_TO_DB`, `PERMANENT_CORRECTION_TYPE_API_TO_DB` déjà exportées pour `ISSUE-03`), composition de `waitingOn` (objet discriminé `user` vs `customer/supplier/other`) à partir des 3 colonnes D1, et `findIssueByPublicId(db, publicId)` (parse strict + lecture D1 + mapping, `null` si format invalide ou id inconnu — pas de requête D1 gaspillée sur un format invalide).
+  - Le mapper importe les types depuis **`src/shared/api-types.generated.ts`** (`components["schemas"]["Issue"]` etc.) au lieu de redéfinir un type `Issue` à la main, conformément à `G-029` (types générés = seule définition).
+  - Tests : `tests/api/public-id.test.ts` (round-trip, rejet du padding non canonique, formats invalides, id 0), `tests/api/issues-mapper.test.ts` (mapping de chaque énumération, `waitingOn` dans ses deux variantes, passthrough des métadonnées de résolution/caviardage), `tests/api/issues-db.test.ts` (lecture réelle sur D1 : id inconnu bien formé → `null`, format invalide → `null` sans requête, dossier réel retrouvé et mappé).
+- **Décision de portée (documentée faute de RFC applicable — pur détail d'implémentation, aucun contrat gelé modifié)** : `ISSUE-01` ne construit que la direction **lecture** (D1 row → `Issue` API), pas l'inverse (`CreateIssueRequest`/`UpdateIssueRequest` → colonnes D1). Raison : la direction écriture doit composer avec des règles qui appartiennent explicitement à `ISSUE-03` (`POST /issues`, preuve = scénarios `S01-S03` de `01_produit/07_SCENARIOS_ACCEPTATION.md`, pas encore lus en détail) — génération de `row_version=1`, `status` par défaut, validation Zod (`worker/validation/`), et permissions (`AUTH-04`). Construire cette direction maintenant sans les scénarios d'acceptation sous les yeux risquait de la faire à moitié puis de la refaire. Les tables de correspondance d'énumération **API→DB** sont déjà exportées et prêtes à être réutilisées telles quelles par `ISSUE-03`, donc rien n'est perdu.
+- **Commandes exécutées** :
+  - `npm run typecheck:worker`, `npm run typecheck:test` → OK
+  - `npx vitest run tests/api/public-id.test.ts tests/api/issues-mapper.test.ts tests/api/issues-db.test.ts` → 16/16
+  - `npm run verify` (from clean) → **exit 0**, **31/31 tests** (9 fichiers)
+- **`npm run verify`** : **PASS** (exit 0)
+- **Staging testé** : non (aucune route HTTP nouvelle exposée — `findIssueByPublicId` est un accès D1 direct testé en intégration Miniflare, pas encore branché sur un endpoint).
+- **Limitations connues / dette** :
+  - Aucun endpoint `GET /issues/{publicId}` n'existe encore (c'est `DETAIL-01`, qui doit aussi ajouter l'en-tête `ETag: "issue-{id}-v{rowVersion}"` — pas construit ici, mais `findIssueByPublicId` lui donne directement ce dont il a besoin).
+  - La direction API→D1 du mapper (écriture) reste à faire dans `ISSUE-03`, voir décision de portée ci-dessus.
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : Intégrateur (agent) ou humain.
+  - `ISSUE-03` (`POST /issues`) est la suite naturelle : lire `01_produit/07_SCENARIOS_ACCEPTATION.md` (S01-S03) et `01_produit/03_MATRICE_TRANSITIONS.md` avant d'implémenter, réutiliser `STATUS_API_TO_DB`/`CAUSE_STATUS_API_TO_DB`/`PERMANENT_CORRECTION_TYPE_API_TO_DB` de `worker/db/issues.ts`, brancher `requireUser`/`requireRole` de `worker/auth/middleware.ts`, valider avec Zod dans `worker/validation/` (dossier encore vide).
+  - Alternative non bloquée : `DETAIL-01` (`GET /issues/{publicId}` + ETag) ne dépend que d'`ISSUE-03` selon le backlog écrit, mais en pratique un `GET` sans `POST` au préalable n'a rien à lire en staging — mieux vaut faire `ISSUE-03` d'abord même si l'ordre strict du backlog ne l'impose pas explicitement.
 
 ---
