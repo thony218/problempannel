@@ -46,5 +46,11 @@
     "wrangler": "^4.36.0",
     "@types/node": "^24",
     "@playwright/test": "^1"
+  },
+  "allowScripts": {
+    "esbuild@0.28.1": true,
+    "fsevents@2.3.2": true,
+    "fsevents@2.3.3": true,
+    "workerd@1.20260820.1": true
   }
 }
