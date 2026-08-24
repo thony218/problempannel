@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.wrangler/
+.tmp/
+.dev.vars
+.env
+.DS_Store
+
+src/shared/api-types.generated.ts

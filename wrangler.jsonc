@@ -1,0 +1,11 @@
+{
+  "$schema":"node_modules/wrangler/config-schema.json",
+  "name":"registre-erreurs-dev",
+  "main":"worker/index.ts",
+  "compatibility_date":"2026-08-24",
+  "assets":{"not_found_handling":"single-page-application"},
+  "vars":{"APP_ENV":"local","BUSINESS_TIME_ZONE":"America/Toronto","MAX_ATTACHMENT_BYTES":"10485760","MAX_ATTACHMENTS_PER_ISSUE":"10","RECURRING_WINDOW_DAYS":"90","RECURRING_MIN_COUNT":"3","ACCESS_TEAM_DOMAIN":"REPLACE_ME","ACCESS_AUD":"REPLACE_ME"},
+  "d1_databases":[{"binding":"DB","database_name":"registre-erreurs-dev","database_id":"REPLACE_DEV_D1_ID","migrations_dir":"migrations"}],
+  "r2_buckets":[{"binding":"ATTACHMENTS","bucket_name":"registre-erreurs-attachments-dev"}],
+  "ratelimits":[{"name":"WRITE_RATE_LIMIT","namespace_id":"1001","simple":{"limit":120,"period":60}},{"name":"UPLOAD_RATE_LIMIT","namespace_id":"1002","simple":{"limit":20,"period":60}}]
+}
