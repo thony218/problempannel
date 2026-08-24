@@ -30,7 +30,7 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 | Vague | Statut |
 |---|---|
 | Bootstrap 0 | PRESQUE TERMINÉ — il ne reste que "CI verte" (bloqué : aucun remote Git configuré) |
-| Vague A — Fondations | EN COURS (FND-03,04,06,07,08,09 acquis via Bootstrap 0 ; FND-01,02,05 faits ; AUTH/META/ISSUE-01+ restent) |
+| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01 faits ; META-02 UI et ISSUE-01+ restent) |
 | Vague B — Tranches verticales | NON DÉMARRÉE |
 | Vague C | NON DÉMARRÉE |
 | Vague D | NON DÉMARRÉE |
@@ -100,5 +100,48 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 - **Prochain propriétaire** : Intégrateur (agent) ou humain. Deux chemins possibles :
   1. Fournir un remote Git → push → confirmer CI verte → Bootstrap 0 formellement clos.
   2. Sans attendre le remote, continuer Vague A : `AUTH-01` (middleware identité locale) et `META-01` (`GET /meta`) sont les prochaines tâches non bloquées (dépendent seulement de `FND-09`, déjà acquis). `V3-INF-01` (séparer les tsconfig) est déjà fait de facto (les 4 tsconfig existaient et typechecked séparément). `V3-BOOT-01`/`V3-BOOT-02` restent à cocher une fois le remote/CI en place.
+
+---
+
+### 2026-08-24 — Identité + permissions + /me + /meta (AUTH-01..05, META-01)
+
+- **Task IDs** : AUTH-01 (middleware identité locale), AUTH-02 (validation Cloudflare Access), AUTH-03 (lookup user actif/rôle), AUTH-04 (helpers permissions), AUTH-05 (`GET /me`), META-01 (`GET /meta`)
+- **Date** : 2026-08-24
+- **Owner** : Intégrateur (agent) — implémente en une passe le propriétaire "3" (auth) puis "4" (endpoints), l'utilisateur ayant choisi de poursuivre sans attendre un remote Git.
+- **Décision de suite** : demandé à l'utilisateur (Bootstrap 0 fait, CI bloquée faute de remote) → réponse : « Continuer Vague A sans remote ». D'où cet enchaînement direct sur AUTH/META.
+- **Commit(s)** : voir `git log` (commit qui suit cette entrée)
+- **Fichiers produits** :
+  - `worker/domain/errors.ts` — `ErrorCode`, `AppError` (code→status HTTP), `errorBody()`/`okBody()` (enveloppe `{ok,data}` / `{ok:false,error:{code,message,fields?,requestId}}` de `02_contrats/05_ERREURS.md`).
+  - `worker/domain/types.ts` — `AppEnv` (`Bindings: Env` généré par `wrangler types` + `Variables: {requestId,user}`), type partagé par tous les routers Hono.
+  - `worker/db/users.ts` — `findUserByEmail` (mapping snake_case→camelCase selon `02_contrats/01_CONVENTIONS_NOMMAGE.md`).
+  - `worker/db/reference.ts` — `listActiveReferences(db, table)` générique pour les 5 tables référentielles (locations/departments/categories/subcategories/impact_types), ne retourne que `active=1`.
+  - `worker/auth/access.ts` — `verifyAccessJwt()` (jose `jwtVerify`, issuer/audience Cloudflare Access), `getKey` injecté pour rester testable sans réseau.
+  - `worker/auth/identity.ts` — `resolveIdentityEmail()` : branche `X-Dev-User-Email` si `APP_ENV==="local"` (impossible sinon, cf. guardrail), sinon jeton `Cf-Access-Jwt-Assertion` vérifié via JWKS distant (`createRemoteJWKSet`, caché en module).
+  - `worker/auth/middleware.ts` — `requireUser` (identité→user D1→actif, sinon 401/403) et `requireRole(...roles)` (403 sinon).
+  - `worker/routes/session.ts` (`GET /me`), `worker/routes/meta.ts` (`GET /meta`), `worker/services/meta.ts` (assemble les 5 référentiels + config depuis les vars d'env).
+  - `worker/index.ts` — middleware `requestId` global + `app.onError` (formatte `AppError` en réponse structurée, sinon 500 `INTERNAL_ERROR` avec `console.error` côté serveur, jamais de détail interne renvoyé au client).
+  - Tests : `tests/api/access.test.ts` (JWT valide/mauvaise audience/mauvais issuer/sans claim email, JWKS local via `jose.createLocalJWKSet`), `tests/api/session.test.ts` (401 sans header, 401 identité sans user D1, 403 `USER_INACTIVE`, 200 + email insensible à la casse), `tests/api/meta.test.ts` (401 sans identité, 200 avec filtrage `active=1` + config exacte), `tests/api/permissions.test.ts` (`requireRole` 403/200 sur une mini-app dédiée, aucune route réelle ne consommait encore ce helper).
+  - `tsconfig.worker.json` — ajout de `worker-configuration.d.ts` à `include` (nécessaire pour que `worker/index.ts` utilise le type `Env` généré au lieu d'un type `Bindings` dupliqué manuellement — dette notée dans l'entrée précédente, résorbée ici).
+  - Suppression des `.gitkeep` dans `worker/{auth,db,domain,routes,services}` et `tests/api` (dossiers plus vides).
+- **Décisions d'implémentation non explicitement tranchées par les contrats** (documentées ici faute de mécanisme RFC formel pour du pur détail d'implémentation, cf. `03_PROCESSUS_RFC_RESOLUTION_DEFAUT.md` — aucune de ces décisions ne modifie un contrat gelé) :
+  - Identité introuvable en base (`utilisateur existant` §2 du contrat sécurité) → `401 UNAUTHORIZED`, pas `403`. Raison : tant que l'identité n'a pas de compte interne correspondant, le système ne peut distinguer "connu mais interdit" de "inconnu" — `401` est plus prudent et n'expose pas l'existence ou non d'un compte.
+  - `worker/domain/` choisi comme emplacement des types/erreurs transverses (pas de dossier `worker/shared/`) : l'arborescence figée (`03_execution/01_STACK_ET_ARBORESCENCE.md`) ne prévoit que `auth/db/domain/routes/services/validation`, et les codes d'erreur + enveloppe de réponse sont des concepts de domaine communs à toutes les routes.
+  - `requireRole` n'est encore câblé sur aucune route réelle (aucun endpoint Vague A n'a de restriction de rôle) : testé isolément via une mini-app Hono jetable dans `tests/api/permissions.test.ts`. Sera réutilisé tel quel dès `ADM-*`/`FLOW-*`.
+- **Commandes exécutées** :
+  - `npm run types:worker` (régénère `worker-configuration.d.ts`, non commité)
+  - `npm run typecheck:worker`, `npm run typecheck:test` → OK
+  - `npx vitest run tests/api/*.test.ts` puis `npm run test` (suite complète) → **13/13 tests passés** (2 santé/migrations pré-existants + 4 access + 5 session + 2 meta) — la suite `permissions.test.ts` (2 tests) a été ajoutée après coup, total final non re-vérifié à 15 avant le `npm run verify` final (voir ligne suivante, qui inclut bien tous les fichiers de `tests/api`).
+  - `npm run verify` (from clean, fichiers générés + `dist/`/`.wrangler/` supprimés avant) → **exit 0**
+- **`npm run verify`** : **PASS** (exit 0)
+- **Staging testé** : non. La branche `AUTH-02` (validation Cloudflare Access réelle) n'est testée qu'unitairement avec un JWKS local signé par le test (`jose.generateKeyPair`) — aucun Cloudflare Access réel n'est configuré (`ACCESS_TEAM_DOMAIN`/`ACCESS_AUD` sont encore `REPLACE_ME` dans `wrangler.jsonc`). La validation bout-en-bout contre un vrai tenant Access est explicitement `OPS-02` (backlog), pas de ce lot.
+- **Limitations connues / dette** :
+  - Aucune donnée de test insérée automatiquement pour `default_location_id`/`default_department_id` des utilisateurs de test (nullable en base, donc pas bloquant, mais les futurs endpoints `issues` avec `location_id NOT NULL` devront seeder plus que `users`+`locations` minimalement dans leurs propres tests).
+  - `console.error` est utilisé pour logger les erreurs 500 côté serveur (`requestId`, erreur sérialisée) — c'est un log minimal, pas encore l'observabilité complète attendue par `OPS-03` (route, statut HTTP, durée systématiques sur *toutes* les requêtes, pas seulement les 500). Ne pas confondre avec "fait" : `OPS-03` reste entièrement à faire.
+  - Le rate limiting (`WRITE_RATE_LIMIT`/`UPLOAD_RATE_LIMIT`, déjà dans `wrangler.jsonc`) n'est câblé sur aucune route pour l'instant — normal, aucune route d'écriture n'existe encore (Vague B).
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : Intégrateur (agent) ou humain. Prochaines tâches non bloquées dans le backlog :
+  - `META-02` (bootstrap session/meta côté UI React : appeler `/me`+`/meta`, gérer 401/403/loading) — dépend de `AUTH-05`+`META-01`, tous deux faits ici.
+  - `ISSUE-01`/`ISSUE-02` (mapper D1↔API Issue, générer `publicId` à partir de `issues.id`) peuvent démarrer en parallèle (dépendent de `FND-08`, déjà fait) sans attendre `META-02`.
+  - Rappel : `PublicId` est déjà défini dans `contracts/openapi.yaml` (`^INC-[0-9]{6,}$`, ex. `INC-000042`) — `ISSUE-02` n'a qu'à implémenter le formatage/parsing, pas à redéfinir le format.
 
 ---
