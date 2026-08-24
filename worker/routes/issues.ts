@@ -4,11 +4,17 @@ import { okBody } from "../domain/errors";
 import { issueETag } from "../domain/etag";
 import { parsePublicId } from "../domain/publicId";
 import { requireUser } from "../auth/middleware";
-import { parseJsonBody } from "../validation/request";
-import { createIssueRequestSchema } from "../validation/issues";
-import { createIssue } from "../services/issues";
+import { parseJsonBody, parseQueryParams } from "../validation/request";
+import { createIssueRequestSchema, listIssuesQuerySchema } from "../validation/issues";
+import { createIssue, listIssues } from "../services/issues";
 
 export const issueRoutes = new Hono<AppEnv>();
+
+issueRoutes.get("/issues", requireUser, async (c) => {
+  const query = parseQueryParams(c, listIssuesQuerySchema);
+  const result = await listIssues(c.env.DB, query);
+  return c.json(okBody(result), 200);
+});
 
 issueRoutes.post("/issues", requireUser, async (c) => {
   const input = await parseJsonBody(c, createIssueRequestSchema);

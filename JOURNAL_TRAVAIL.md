@@ -237,3 +237,38 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
   - **Rappel méthodologique pour la suite** : quand une requête D1 combine plusieurs statements dans un même `db.batch()` avec une dépendance entre eux (ex: enfant qui a besoin de l'id généré par le parent), ne jamais supposer qu'une construction SQL "standard" fonctionne sous SQLite — la valider par un `wrangler d1 execute --local` direct avant de l'intégrer, et écrire un test avec **au moins 2 lignes enfants** pour détecter une dérive de `last_insert_rowid()` comme celle corrigée ici.
 
 ---
+
+### 2026-08-24 — Pagination curseur opaque + GET /issues filtré & recherche q (LIST-01, LIST-02, LIST-03)
+
+- **Task IDs** : LIST-01 (pagination curseur opaque), LIST-02 (`GET /issues` + filtres), LIST-03 (recherche `q` avec échappement SQLite)
+- **Date** : 2026-08-24
+- **Owner** : Intégrateur (agent), sur confirmation de plan d'implémentation par l'utilisateur.
+- **Fichiers produits/modifiés** :
+  - `worker/domain/cursor.ts` — `encodeCursor({ id })` et `decodeCursor(cursor)` (encodage/décodage Base64URL d'un payload JSON d'ID, résistant aux chaînes malformées/invalides/négatives).
+  - `worker/validation/request.ts` — `parseQueryParams(c, schema)` (supporte les query params simples et répétés sous forme de tableaux, validation Zod vers 422 `VALIDATION_ERROR`).
+  - `worker/validation/issues.ts` — `listIssuesQuerySchema` (validation et coercion des query params : `cursor`, `limit` [1..100, def 25], `q` [2..40], `status` multi-valeurs, `priority` multi-valeurs, `locationId`, `departmentId`, `categoryId`, `ownerUserId`, `from`, `to`, `overdue`, `effectivenessStatus`, `effectivenessReviewDueBefore`).
+  - `worker/db/issues.ts` — `queryIssuesList(db, params)` (requête SQL D1 paramétrée dynamique : filtre par curseur `id < ?`, statuts/priorités `IN (...)`, filtres d'IDs, filtres de dates `occurred_on`, filtre `overdue` [due_date passée et non résolu], filtre `effectiveness_status`, filtre `effectiveness_review_due_before` [résolu pending et review_date <= date], recherche `q` [par format `INC-XXXXXX` / ID exact ou `description LIKE ? ESCAPE '\'`], tri `ORDER BY id DESC LIMIT ? + 1` pour déterminer `hasMore`).
+  - `worker/services/issues.ts` — `listIssues(db, query)` (validation/décodage du curseur en amont avec 422 en cas de corruption, appel de `queryIssuesList`, mapping des lignes et composition de `nextCursor`).
+  - `worker/routes/issues.ts` — `GET /issues` : `requireUser`, parse des query params, réponse standardisée 200 `{ ok: true, data: { items, nextCursor, hasMore } }`.
+  - Tests : `tests/api/cursor.test.ts` (3 tests unitaires de round-trip, entiers variés, rejets de malformations), `tests/api/issues-list.test.ts` (16 tests d'intégration : 401 non authentifié, liste vide, pagination complète page par page, rejet curseur invalide, statuts simples et multiples, priorités, succursales/départements/catégories/assignés, plages de dates, filtre overdue, révisions dues, recherche mot-clé avec caractères spéciaux `%` et `_`, recherche `INC-XXXXXX`, validations limites/dates).
+- **Points notables découverts et validés** :
+  - La contrainte SQLite `status = 'new' OR subcategory_id IS NOT NULL` (décision D-07 / V3-TRIAGE-01) a été scrupuleusement respectée dans les fixtures des tests pour tous les dossiers ayant un statut non `new`.
+  - Pour les tests de pagination et de recherche par identifiant, les `publicId` réels retournés par les requêtes D1 `RETURNING id` sont utilisés dynamiquement pour éviter toute dépendance à l'état de `sqlite_sequence`.
+- **Commandes exécutées** :
+  - `npm run typecheck` (app, worker, test, e2e) → OK (0 erreur)
+  - `npm run contract:lint` → OK (0 erreur, 1 warning explicable sur `/health`)
+  - `npx vitest run tests/api/cursor.test.ts` → 3/3 passés
+  - `npx vitest run tests/api/issues-list.test.ts` → 16/16 passés
+  - `npm run test` (suite complète de tests) → **67/67 passés** (12 fichiers)
+  - `npm run verify` (from clean) → **exit 0**, **67/67 tests**
+- **`npm run verify`** : **PASS** (exit 0)
+- **Staging testé** : non.
+- **Limitations connues / dette** :
+  - `GET /issues/{publicId}` n'est pas encore exposé en route HTTP (c'est `DETAIL-01`, qui utilisera `findIssueByPublicId` déjà implémenté dans `worker/db/issues.ts`).
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : Intégrateur (agent) ou humain.
+  - Côté backend : `DETAIL-01` (`GET /issues/{publicId}` + ETag) suivi de `FLOW-01` à `FLOW-04` (`PATCH /issues/{publicId}`, `If-Match`, gestion des conflits 409 et matrice de transitions).
+  - Côté frontend : `META-02` (Bootstrap React / Auth / Meta) pour démarrer l'UI, suivi de `ISSUE-05` (Formulaire Nouveau) et `LIST-04` (Écran Registre mobile).
+
+---
+

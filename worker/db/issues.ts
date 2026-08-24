@@ -250,3 +250,142 @@ export async function insertIssue(db: D1Database, input: NewIssueInput): Promise
   const row = results[0].results[0] as IssueRow;
   return mapIssueRow(row);
 }
+
+export interface ListIssuesDbParams {
+  cursorId?: number | null;
+  limit: number;
+  q?: string;
+  status?: ApiIssueStatus[];
+  priority?: string[];
+  locationId?: number;
+  departmentId?: number;
+  categoryId?: number;
+  ownerUserId?: number;
+  from?: string;
+  to?: string;
+  overdue?: boolean;
+  effectivenessStatus?: string;
+  effectivenessReviewDueBefore?: string;
+}
+
+export interface ListIssuesDbResult {
+  rows: IssueRow[];
+  hasMore: boolean;
+}
+
+/**
+ * Exécute une requête filtrée, recherchée et paginée par curseur opaque sur issues.
+ * Utilise toujours une clause préparée avec placeholders pour éviter toute injection.
+ */
+export async function queryIssuesList(
+  db: D1Database,
+  params: ListIssuesDbParams
+): Promise<ListIssuesDbResult> {
+  const whereClauses: string[] = [];
+  const bindings: unknown[] = [];
+
+  if (typeof params.cursorId === "number" && params.cursorId > 0) {
+    whereClauses.push("id < ?");
+    bindings.push(params.cursorId);
+  }
+
+  if (params.status && params.status.length > 0) {
+    const dbStatuses = params.status.map((s) => STATUS_API_TO_DB[s]).filter(Boolean);
+    if (dbStatuses.length > 0) {
+      const placeholders = dbStatuses.map(() => "?").join(", ");
+      whereClauses.push(`status IN (${placeholders})`);
+      bindings.push(...dbStatuses);
+    }
+  }
+
+  if (params.priority && params.priority.length > 0) {
+    const placeholders = params.priority.map(() => "?").join(", ");
+    whereClauses.push(`priority IN (${placeholders})`);
+    bindings.push(...params.priority);
+  }
+
+  if (params.locationId) {
+    whereClauses.push("location_id = ?");
+    bindings.push(params.locationId);
+  }
+
+  if (params.departmentId) {
+    whereClauses.push("department_id = ?");
+    bindings.push(params.departmentId);
+  }
+
+  if (params.categoryId) {
+    whereClauses.push("category_id = ?");
+    bindings.push(params.categoryId);
+  }
+
+  if (params.ownerUserId) {
+    whereClauses.push("owner_user_id = ?");
+    bindings.push(params.ownerUserId);
+  }
+
+  if (params.from) {
+    whereClauses.push("occurred_on >= ?");
+    bindings.push(params.from);
+  }
+
+  if (params.to) {
+    whereClauses.push("occurred_on <= ?");
+    bindings.push(params.to);
+  }
+
+  if (params.overdue) {
+    whereClauses.push("due_date IS NOT NULL AND date(due_date) < date('now') AND status != 'resolved'");
+  }
+
+  if (params.effectivenessStatus) {
+    whereClauses.push("effectiveness_status = ?");
+    bindings.push(params.effectivenessStatus);
+  }
+
+  if (params.effectivenessReviewDueBefore) {
+    whereClauses.push(
+      "status = 'resolved' AND effectiveness_status = 'pending' AND effectiveness_review_date IS NOT NULL AND date(effectiveness_review_date) <= date(?)"
+    );
+    bindings.push(params.effectivenessReviewDueBefore);
+  }
+
+  if (params.q && params.q.trim().length > 0) {
+    const trimmed = params.q.trim();
+    const parsedId = parsePublicId(trimmed);
+    const numericId =
+      !isNaN(Number(trimmed)) && Number.isInteger(Number(trimmed)) && Number(trimmed) > 0
+        ? Number(trimmed)
+        : null;
+    const targetId = parsedId ?? numericId;
+
+    const escaped = trimmed.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+    const likePattern = `%${escaped}%`;
+
+    if (targetId !== null) {
+      whereClauses.push("(id = ? OR description LIKE ? ESCAPE '\\')");
+      bindings.push(targetId, likePattern);
+    } else {
+      whereClauses.push("description LIKE ? ESCAPE '\\'");
+      bindings.push(likePattern);
+    }
+  }
+
+  const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+  const fetchLimit = params.limit + 1;
+  const sql = `SELECT ${ISSUE_COLUMNS} FROM issues ${whereSql} ORDER BY id DESC LIMIT ?`;
+  bindings.push(fetchLimit);
+
+  const stmt = db.prepare(sql).bind(...bindings);
+  const result = await stmt.all<IssueRow>();
+  const rows = result.results || [];
+
+  const hasMore = rows.length > params.limit;
+  const pageRows = hasMore ? rows.slice(0, params.limit) : rows;
+
+  return {
+    rows: pageRows,
+    hasMore,
+  };
+}
+

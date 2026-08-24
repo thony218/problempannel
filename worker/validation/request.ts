@@ -31,3 +31,26 @@ export async function parseJsonBody<T>(c: Context, schema: ZodType<T>): Promise<
   }
   return result.data;
 }
+
+/**
+ * Lit et valide les query parameters d'une requête GET contre un schéma Zod.
+ * Regroupe les paramètres simples et multi-valeurs.
+ */
+export function parseQueryParams<T>(c: Context, schema: ZodType<T>): T {
+  const queries = c.req.queries();
+  const raw: Record<string, unknown> = {};
+  for (const [key, values] of Object.entries(queries)) {
+    if (!values || values.length === 0) continue;
+    if (values.length === 1) {
+      raw[key] = values[0];
+    } else {
+      raw[key] = values;
+    }
+  }
+  const result = schema.safeParse(raw);
+  if (!result.success) {
+    throw new AppError("VALIDATION_ERROR", "Paramètres de requête invalides.", fieldsFromZodError(result.error));
+  }
+  return result.data;
+}
+

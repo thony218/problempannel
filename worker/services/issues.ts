@@ -1,7 +1,9 @@
 import { AppError } from "../domain/errors";
+import { decodeCursor, encodeCursor } from "../domain/cursor";
 import { findActiveReferenceById, findActiveReferencesByIds } from "../db/reference";
-import { insertIssue, type ApiIssue } from "../db/issues";
-import type { CreateIssueInput } from "../validation/issues";
+import { insertIssue, mapIssueRow, queryIssuesList, type ApiIssue } from "../db/issues";
+import type { CreateIssueInput, ListIssuesQuery } from "../validation/issues";
+
 
 const NONE_EXTERNAL_CODE = "none_external";
 const OTHER_CODE = "other";
@@ -99,3 +101,59 @@ export async function createIssue(
     })),
   });
 }
+
+export interface ListIssuesResponseData {
+  items: ApiIssue[];
+  nextCursor: string | null;
+  hasMore: boolean;
+}
+
+/**
+ * Service de listage des dossiers : décode le curseur opaque, appelle la requête
+ * DB filtrée et encode le curseur de la page suivante si disponible.
+ */
+export async function listIssues(
+  db: D1Database,
+  query: ListIssuesQuery
+): Promise<ListIssuesResponseData> {
+  let cursorId: number | null = null;
+  if (query.cursor) {
+    const decoded = decodeCursor(query.cursor);
+    if (!decoded) {
+      throw new AppError("VALIDATION_ERROR", "Curseur invalide.", {
+        cursor: "Curseur de pagination invalide ou expiré.",
+      });
+    }
+    cursorId = decoded.id;
+  }
+
+  const result = await queryIssuesList(db, {
+    cursorId,
+    limit: query.limit,
+    q: query.q,
+    status: query.status,
+    priority: query.priority,
+    locationId: query.locationId,
+    departmentId: query.departmentId,
+    categoryId: query.categoryId,
+    ownerUserId: query.ownerUserId,
+    from: query.from,
+    to: query.to,
+    overdue: query.overdue,
+    effectivenessStatus: query.effectivenessStatus,
+    effectivenessReviewDueBefore: query.effectivenessReviewDueBefore,
+  });
+
+  const items = result.rows.map(mapIssueRow);
+  const nextCursor =
+    result.hasMore && result.rows.length > 0
+      ? encodeCursor({ id: result.rows[result.rows.length - 1].id })
+      : null;
+
+  return {
+    items,
+    nextCursor,
+    hasMore: result.hasMore,
+  };
+}
+
