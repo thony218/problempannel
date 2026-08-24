@@ -29,8 +29,8 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 
 | Vague | Statut |
 |---|---|
-| Bootstrap 0 | EN COURS |
-| Vague A — Fondations | NON DÉMARRÉE |
+| Bootstrap 0 | PRESQUE TERMINÉ — il ne reste que "CI verte" (bloqué : aucun remote Git configuré) |
+| Vague A — Fondations | EN COURS (FND-03,04,06,07,08,09 acquis via Bootstrap 0 ; FND-01,02,05 faits ; AUTH/META/ISSUE-01+ restent) |
 | Vague B — Tranches verticales | NON DÉMARRÉE |
 | Vague C | NON DÉMARRÉE |
 | Vague D | NON DÉMARRÉE |
@@ -54,5 +54,51 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 - **Limitations connues** : aucun remote Git configuré (pas d'URL fournie par l'utilisateur). Tout reste local pour l'instant.
 - **RFC ouverte** : non
 - **Prochain propriétaire** : Intégrateur (agent), suite immédiate = FND-02 (npm install + lockfile) dans ce même passage.
+
+---
+
+### 2026-08-24 — Bootstrap 0 : `npm run verify` vert (FND-02 → FND-09)
+
+- **Task IDs** : FND-02 (lockfile), FND-03 (config Vite/Worker), FND-04 (tests Worker), FND-06 (lint OpenAPI), FND-07 (types OpenAPI), FND-08 (migration D1 locale), FND-09 (seeds)
+- **Date** : 2026-08-24
+- **Owner** : Intégrateur (agent)
+- **Commit(s)** : suit celui de l'entrée précédente dans ce même passage (voir `git log`)
+- **Fichiers produits/modifiés** :
+  - `package.json` (versions corrigées, script `types:worker`, `verify` mis à jour)
+  - `package-lock.json` (régénéré, propre, `npm ci` reproductible)
+  - `contracts/openapi.yaml` (44 `summary` d'opération + réponses 4xx manquantes + descriptions de tags + `info.license`)
+  - `tests/setup.ts` (correction de l'augmentation de type pour `@cloudflare/vitest-plugin` v1)
+  - `tsconfig.test.json` (inclusion de `worker-configuration.d.ts` généré)
+  - `.gitignore` (ajout de `worker-configuration.d.ts`, généré et non commité comme `api-types.generated.ts`)
+- **Bugs réels trouvés et corrigés** (pas de contournement cosmétique — chaque point ci-dessous bloquait `npm ci` ou `npm run verify`) :
+  1. **`typescript` était pinné à `7.0.2`** dans `package.json`, mais `openapi-typescript@7.13.0` (dernière version publiée) déclare `peerDependencies.typescript: "^5.x"` **et** utilise réellement l'API interne `ts.factory` du compilateur pour générer les types — API qui n'existe plus du tout dans TypeScript 7 (réécriture "Corsa"/Go, `ts.factory` est `undefined`). Ce n'était pas qu'un conflit de peer dependency déclaratif : `npm run contract:generate` plantait à l'exécution (`TypeError: Cannot read properties of undefined (reading 'createKeywordTypeNode')`). **Fix : `typescript` repointé sur `5.9.3`** (dernière 5.x, satisfait le peerDependency nativement, aucun flag npm requis).
+  2. **`@cloudflare/workers-types` était pinné à `^4`**, mais `wrangler@4.125.0` (résolu par `npm install`) déclare `peerDependencies.@cloudflare/workers-types: "^5.20260820.1"`. **Fix : repointé sur `^5`** (résolu en `5.20260823.1`).
+  3. **npm 12 bloque par défaut les scripts d'installation** (`esbuild`, `fsevents`, `workerd`) via son nouveau mécanisme `allowScripts`. Sans approbation, le binaire `workerd` n'est jamais téléchargé et Vite/Wrangler ne peuvent pas démarrer le runtime Workers. **Fix : `npm install-scripts approve esbuild fsevents workerd`**, ce qui écrit un bloc `allowScripts` dans `package.json` (commité, donc `npm ci` en CI aura le même comportement).
+  4. **`contracts/openapi.yaml` ne passait pas `redocly lint`** (44 erreurs + 21 warnings avec le ruleset "recommended" par défaut, aucun `redocly.yaml` custom livré) : il manquait un `summary` sur chacune des 44 opérations. **Fix : ajout des 44 `summary`**, plus les réponses 4xx documentées manquantes (401/404 selon le cas), les descriptions des 10 tags et `info.license` — pour un lint propre (0 erreur, 1 seul warning restant et volontairement laissé : `/health` n'a structurellement aucun 4xx pertinent, c'est un endpoint public sans paramètre).
+  5. **`tests/setup.ts` utilisait le pattern `declare module "cloudflare:test" { interface ProvidedEnv {...} }`**, qui est le pattern d'une ancienne version de `@cloudflare/vitest-plugin`. Dans la version installée (`1.0.0`), `env` est typé `Cloudflare.Env` (issu de `wrangler types`), et `ProvidedEnv` n'existe plus dans les types du package — la déclaration ne faisait donc plus rien, et `env.DB` / `env.TEST_MIGRATIONS` étaient introuvables au typecheck. **Fix : génération de `worker-configuration.d.ts` via un nouveau script `types:worker` (`wrangler types`, ajouté à `verify` avant `typecheck`), inclusion dans `tsconfig.test.json`, et remplacement de l'augmentation par `declare global { namespace Cloudflare { interface Env { TEST_MIGRATIONS: D1Migration[] } } }`** (le binding `TEST_MIGRATIONS` n'existe que côté Miniflare/tests, pas en prod — d'où l'augmentation locale au lieu de l'ajouter à `wrangler.jsonc`).
+- **Commandes exécutées** (dans l'ordre, reproductibles) :
+  - `npm install-scripts approve esbuild fsevents workerd`
+  - `npm install` puis `rm -rf node_modules && npm ci` (vérifié identique à ce que fait la CI)
+  - `npx redocly lint contracts/openapi.yaml` → 0 erreur, 1 warning (voir ci-dessus)
+  - `npm run contract:generate` → OK
+  - `npm run types:worker` (= `wrangler types`) → OK, génère `worker-configuration.d.ts` (non commité)
+  - `npm run typecheck` (app+worker+test+e2e) → OK
+  - `npm run test` (vitest, D1 via Miniflare) → 2/2 passés
+  - `npm run build` → OK (Worker + client)
+  - `npx wrangler d1 migrations apply DB --local` → 34 commandes exécutées, `0001_core.sql` appliqué sur un vrai D1 local (`.wrangler/state`, gitignored)
+  - `npx wrangler d1 execute DB --local --file=seed/reference.sql` puis `--file=seed/dev.sql` → OK
+  - Vérification des comptes : `locations=2, departments=7, categories=9, subcategories=35, impact_types=10, users=3` — conforme au contenu de `seed/reference.sql` + `seed/dev.sql`
+  - `npm run verify` (from clean : fichiers générés supprimés, `dist/`+`.wrangler/` supprimés) → **exit 0**
+- **`npm run verify`** : **PASS** (exit 0)
+- **Staging testé** : non (pas de compte Cloudflare/staging fourni à ce stade — hors périmètre Bootstrap 0)
+- **Limitations connues / dette** :
+  - Aucun remote Git configuré → impossible de faire tourner la CI GitHub Actions réelle (`V3-BOOT-02`/critère de sortie Bootstrap 0 "CI verte" reste ouvert). Dès qu'un remote est fourni : `git push` puis vérifier le run GitHub Actions.
+  - `wrangler.jsonc` contient encore des `REPLACE_ME`/`REPLACE_DEV_D1_ID` (Access team domain/AUD, D1 id réel) — normal à ce stade (pas encore de ressources Cloudflare provisionnées, cf. OPS-01).
+  - Le warning de lint OpenAPI restant sur `/health` (`operation-4xx-response`) est un faux positif assumé : ce endpoint est public (`security: []`), sans paramètre, donc structurellement sans 4xx métier pertinent. Pas de suppression de règle globale pour autant — seul ce point reste, documenté ici.
+  - `worker/index.ts` définit encore manuellement son type `Bindings` (Hono) au lieu d'utiliser le `Env`/`Cloudflare.Env` généré par `wrangler types`. Pas touché à ce stade (hors périmètre Bootstrap 0, le code typecheckait déjà) — à corriger quand AUTH-01/META-01 démarreront pour éviter une double définition des bindings (cf. `G-029`).
+- **RFC ouverte** : non — tous les changements ci-dessus sont des corrections techniques de compatibilité de dépendances (pas des décisions de contrat/produit gelées), cf. `03_PROCESSUS_RFC_RESOLUTION_DEFAUT.md` scope.
+- **Prochain propriétaire** : Intégrateur (agent) ou humain. Deux chemins possibles :
+  1. Fournir un remote Git → push → confirmer CI verte → Bootstrap 0 formellement clos.
+  2. Sans attendre le remote, continuer Vague A : `AUTH-01` (middleware identité locale) et `META-01` (`GET /meta`) sont les prochaines tâches non bloquées (dépendent seulement de `FND-09`, déjà acquis). `V3-INF-01` (séparer les tsconfig) est déjà fait de facto (les 4 tsconfig existaient et typechecked séparément). `V3-BOOT-01`/`V3-BOOT-02` restent à cocher une fois le remote/CI en place.
 
 ---

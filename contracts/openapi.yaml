@@ -3,21 +3,34 @@ info:
   title: Registre des erreurs API
   version: 1.0.0
   description: Contrat API officiel de la V1.
+  license:
+    name: Propriétaire — usage interne uniquement
+    identifier: LicenseRef-Proprietary
 servers:
 - url: /api
 security:
 - CloudflareAccessJWT: []
 tags:
 - name: Session
+  description: Santé du service et identité de l'utilisateur courant.
 - name: Meta
+  description: Référentiels actifs et configuration client.
 - name: Issues
+  description: Cycle de vie des dossiers (création, consultation, modification).
 - name: Comments
+  description: Commentaires attachés à un dossier.
 - name: Attachments
+  description: Pièces jointes stockées dans R2 et liées à un dossier.
 - name: CorrectiveActions
+  description: Actions correctives associées à un dossier.
 - name: History
+  description: Historique append-only des événements d'un dossier.
 - name: Links
+  description: Liens entre dossiers similaires.
 - name: Analytics
+  description: KPI, récurrences et efficacité des corrections.
 - name: Admin
+  description: Administration des utilisateurs, référentiels et caviardage.
 paths:
   /health:
     get:
@@ -25,6 +38,7 @@ paths:
       tags:
       - Session
       operationId: getHealth
+      summary: Vérifier l'état du Worker.
       responses:
         '200':
           description: Worker opérationnel.
@@ -37,6 +51,7 @@ paths:
       tags:
       - Session
       operationId: getMe
+      summary: Récupérer l'utilisateur courant.
       responses:
         '200':
           description: Utilisateur courant.
@@ -53,6 +68,7 @@ paths:
       tags:
       - Meta
       operationId: getMeta
+      summary: Récupérer les référentiels actifs et la configuration client.
       responses:
         '200':
           description: Référentiels actifs et configuration client.
@@ -60,11 +76,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MetaResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /issues:
     get:
       tags:
       - Issues
       operationId: listIssues
+      summary: Lister les dossiers avec filtres et pagination.
       parameters:
       - $ref: '#/components/parameters/Cursor'
       - $ref: '#/components/parameters/Limit'
@@ -131,6 +150,7 @@ paths:
       tags:
       - Issues
       operationId: createIssue
+      summary: Créer un dossier.
       x-rate-limit: write
       requestBody:
         required: true
@@ -163,6 +183,7 @@ paths:
       tags:
       - Issues
       operationId: getIssue
+      summary: Récupérer le détail d'un dossier.
       responses:
         '200':
           description: Détail cœur, impacts et actions correctives.
@@ -181,6 +202,7 @@ paths:
       tags:
       - Issues
       operationId: updateIssue
+      summary: Modifier un dossier.
       x-rate-limit: write
       parameters:
       - $ref: '#/components/parameters/IfMatch'
@@ -221,6 +243,7 @@ paths:
       tags:
       - Comments
       operationId: listComments
+      summary: Lister les commentaires d'un dossier.
       parameters:
       - $ref: '#/components/parameters/Cursor'
       - $ref: '#/components/parameters/Limit'
@@ -231,10 +254,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CommentListResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
     post:
       tags:
       - Comments
       operationId: createComment
+      summary: Ajouter un commentaire à un dossier.
       x-rate-limit: write
       requestBody:
         required: true
@@ -266,6 +292,7 @@ paths:
       tags:
       - Comments
       operationId: deleteComment
+      summary: Supprimer (soft-delete) un commentaire.
       x-rate-limit: write
       requestBody:
         required: true
@@ -295,6 +322,7 @@ paths:
       tags:
       - Attachments
       operationId: listAttachments
+      summary: Lister les pièces jointes actives d'un dossier.
       responses:
         '200':
           description: Pièces jointes actives.
@@ -302,10 +330,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AttachmentListResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
     post:
       tags:
       - Attachments
       operationId: uploadAttachment
+      summary: Téléverser une pièce jointe.
       x-rate-limit: upload
       requestBody:
         required: true
@@ -349,6 +380,7 @@ paths:
       tags:
       - Attachments
       operationId: downloadAttachment
+      summary: Télécharger une pièce jointe.
       responses:
         '200':
           description: Contenu du fichier autorisé.
@@ -363,6 +395,7 @@ paths:
       tags:
       - Attachments
       operationId: deleteAttachment
+      summary: Supprimer (soft-delete) une pièce jointe.
       x-rate-limit: write
       responses:
         '204':
@@ -378,6 +411,7 @@ paths:
       tags:
       - CorrectiveActions
       operationId: listCorrectiveActions
+      summary: Lister les actions correctives d'un dossier.
       responses:
         '200':
           description: Actions correctives.
@@ -385,10 +419,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/CorrectiveActionListResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
     post:
       tags:
       - CorrectiveActions
       operationId: createCorrectiveAction
+      summary: Créer une action corrective.
       x-rate-limit: write
       requestBody:
         required: true
@@ -414,6 +451,7 @@ paths:
       tags:
       - CorrectiveActions
       operationId: getCorrectiveAction
+      summary: Récupérer une action corrective.
       responses:
         '200':
           description: Action corrective.
@@ -427,6 +465,7 @@ paths:
       tags:
       - CorrectiveActions
       operationId: updateCorrectiveAction
+      summary: Modifier une action corrective.
       x-rate-limit: write
       requestBody:
         required: true
@@ -452,6 +491,7 @@ paths:
       tags:
       - History
       operationId: listIssueHistory
+      summary: Lister l'historique append-only d'un dossier.
       parameters:
       - $ref: '#/components/parameters/Cursor'
       - $ref: '#/components/parameters/Limit'
@@ -462,6 +502,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/HistoryListResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /issues/{publicId}/links:
     parameters:
     - $ref: '#/components/parameters/PublicId'
@@ -469,6 +511,7 @@ paths:
       tags:
       - Links
       operationId: listIssueLinks
+      summary: Lister les cas liés (similar) d'un dossier.
       responses:
         '200':
           description: Cas liés.
@@ -476,10 +519,13 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/LinkListResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
     post:
       tags:
       - Links
       operationId: createIssueLink
+      summary: Lier un dossier à un autre dossier.
       x-rate-limit: write
       requestBody:
         required: true
@@ -516,6 +562,7 @@ paths:
       tags:
       - Links
       operationId: deleteIssueLink
+      summary: Retirer le lien entre deux dossiers.
       x-rate-limit: write
       responses:
         '204':
@@ -529,6 +576,7 @@ paths:
       tags:
       - Analytics
       operationId: getAnalyticsSummary
+      summary: Récupérer les KPI de synthèse.
       parameters:
       - $ref: '#/components/parameters/DateFrom'
       - $ref: '#/components/parameters/DateTo'
@@ -542,11 +590,14 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/AnalyticsSummaryResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /analytics/recurring:
     get:
       tags:
       - Analytics
       operationId: getRecurringIssues
+      summary: Récupérer les groupes de récurrences.
       parameters:
       - $ref: '#/components/parameters/LocationIdQuery'
       - $ref: '#/components/parameters/DepartmentIdQuery'
@@ -558,6 +609,8 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/RecurringResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
       description: Retourne les récurrences locales (location+subcategory) et organisationnelles (subcategory) selon
         seuil 3/90 jours.
   /analytics/effectiveness:
@@ -565,6 +618,7 @@ paths:
       tags:
       - Analytics
       operationId: getEffectiveness
+      summary: Récupérer l'efficacité des corrections.
       parameters:
       - $ref: '#/components/parameters/DateFrom'
       - $ref: '#/components/parameters/DateTo'
@@ -575,12 +629,15 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/EffectivenessResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
       description: Agrège uniquement issues.effectiveness_status; les actions correctives sont exclues du KPI principal.
   /admin/users:
     get:
       tags:
       - Admin
       operationId: adminListUsers
+      summary: Lister les utilisateurs.
       responses:
         '200':
           description: Utilisateurs.
@@ -594,6 +651,7 @@ paths:
       tags:
       - Admin
       operationId: adminCreateUser
+      summary: Créer un utilisateur.
       x-rate-limit: write
       requestBody:
         required: true
@@ -619,6 +677,7 @@ paths:
       tags:
       - Admin
       operationId: adminUpdateUser
+      summary: Modifier un utilisateur.
       x-rate-limit: write
       requestBody:
         required: true
@@ -644,6 +703,7 @@ paths:
       tags:
       - Admin
       operationId: adminRedactIssue
+      summary: Caviarder un dossier.
       x-rate-limit: write
       requestBody:
         required: true
@@ -669,6 +729,7 @@ paths:
       tags:
       - Admin
       operationId: adminListLocations
+      summary: Lister le référentiel des succursales.
       responses:
         '200':
           description: Référentiel.
@@ -682,6 +743,7 @@ paths:
       tags:
       - Admin
       operationId: adminCreateLocations
+      summary: Créer une succursale.
       x-rate-limit: write
       requestBody:
         required: true
@@ -712,6 +774,7 @@ paths:
       tags:
       - Admin
       operationId: adminUpdateLocations
+      summary: Modifier une succursale.
       x-rate-limit: write
       requestBody:
         required: true
@@ -737,6 +800,7 @@ paths:
       tags:
       - Admin
       operationId: adminListDepartments
+      summary: Lister le référentiel des départements.
       responses:
         '200':
           description: Référentiel.
@@ -750,6 +814,7 @@ paths:
       tags:
       - Admin
       operationId: adminCreateDepartments
+      summary: Créer un département.
       x-rate-limit: write
       requestBody:
         required: true
@@ -780,6 +845,7 @@ paths:
       tags:
       - Admin
       operationId: adminUpdateDepartments
+      summary: Modifier un département.
       x-rate-limit: write
       requestBody:
         required: true
@@ -805,6 +871,7 @@ paths:
       tags:
       - Admin
       operationId: adminListCategories
+      summary: Lister le référentiel des catégories.
       responses:
         '200':
           description: Référentiel.
@@ -818,6 +885,7 @@ paths:
       tags:
       - Admin
       operationId: adminCreateCategories
+      summary: Créer une catégorie.
       x-rate-limit: write
       requestBody:
         required: true
@@ -848,6 +916,7 @@ paths:
       tags:
       - Admin
       operationId: adminUpdateCategories
+      summary: Modifier une catégorie.
       x-rate-limit: write
       requestBody:
         required: true
@@ -873,6 +942,7 @@ paths:
       tags:
       - Admin
       operationId: adminListImpactTypes
+      summary: Lister le référentiel des types d'impact.
       responses:
         '200':
           description: Référentiel.
@@ -886,6 +956,7 @@ paths:
       tags:
       - Admin
       operationId: adminCreateImpactTypes
+      summary: Créer un type d'impact.
       x-rate-limit: write
       requestBody:
         required: true
@@ -916,6 +987,7 @@ paths:
       tags:
       - Admin
       operationId: adminUpdateImpactTypes
+      summary: Modifier un type d'impact.
       x-rate-limit: write
       requestBody:
         required: true
@@ -941,6 +1013,7 @@ paths:
       tags:
       - Admin
       operationId: adminListSubcategories
+      summary: Lister le référentiel des sous-catégories.
       responses:
         '200':
           description: Référentiel.
@@ -954,6 +1027,7 @@ paths:
       tags:
       - Admin
       operationId: adminCreateSubcategories
+      summary: Créer une sous-catégorie.
       x-rate-limit: write
       requestBody:
         required: true
@@ -984,6 +1058,7 @@ paths:
       tags:
       - Admin
       operationId: adminUpdateSubcategories
+      summary: Modifier une sous-catégorie.
       x-rate-limit: write
       requestBody:
         required: true

@@ -19,6 +19,7 @@
   "include": [
     "tests/**/*.test.ts",
     "tests/setup.ts",
-    "vitest.config.ts"
+    "vitest.config.ts",
+    "worker-configuration.d.ts"
   ]
 }

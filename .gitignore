@@ -7,3 +7,4 @@ dist/
 .DS_Store
 
 src/shared/api-types.generated.ts
+worker-configuration.d.ts
