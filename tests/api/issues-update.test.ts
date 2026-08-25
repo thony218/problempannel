@@ -326,21 +326,22 @@ describe("PATCH /api/issues/:publicId", () => {
     expect(res.status).toBe(200);
   });
 
-  it("rejects an inactive/unknown ownerUserId", async () => {
+  it("rejects an inactive/unknown ownerUserId (manager)", async () => {
     const { publicId, etag } = await createIssue();
-    const res = await patch(`/issues/${publicId}`, { ownerUserId: 999999 }, { "If-Match": etag });
+    const res = await patch(`/issues/${publicId}`, { ownerUserId: 999999 }, { "If-Match": etag }, MANAGER_HEADER);
     expect(res.status).toBe(422);
     const body = (await res.json()) as any;
     expect(body.error.fields.ownerUserId).toBeDefined();
   });
 
-  it("accepts a valid ownerUserId", async () => {
+  it("accepts a valid ownerUserId (manager)", async () => {
     const { publicId, etag } = await createIssue();
-    const res = await patch(`/issues/${publicId}`, { ownerUserId: secondUserId }, { "If-Match": etag });
+    const res = await patch(`/issues/${publicId}`, { ownerUserId: secondUserId }, { "If-Match": etag }, MANAGER_HEADER);
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
     expect(body.data.issue.ownerUserId).toBe(secondUserId);
   });
+
 
   it("rejects an unknown field (additionalProperties: false)", async () => {
     const { publicId, etag } = await createIssue();

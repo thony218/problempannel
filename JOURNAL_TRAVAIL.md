@@ -30,7 +30,7 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 | Vague | Statut |
 |---|---|
 | Bootstrap 0 | PRESQUE TERMINÉ — il ne reste que "CI verte" (bloqué : aucun remote Git configuré) |
-| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01 + ISSUE-01/02/03/04 + LIST-01/02/03 + DETAIL-01 + FLOW-01/02/03/04 faits ; META-02 UI, ISSUE-05+ restent) |
+| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01/02 + ISSUE-01..05 + LIST-01..03 + DETAIL-01 + FLOW-01..04 + QA-01 faits ; ISSUE-06/07, LIST-04, DETAIL-02 restent) |
 
 | Vague B — Tranches verticales | NON DÉMARRÉE |
 | Vague C | NON DÉMARRÉE |
@@ -431,10 +431,62 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
   - L'ensemble des règles de workflow de base (`FLOW-01`, `FLOW-02`, `FLOW-03`, `FLOW-04`) est maintenant intégralement implémenté et couvert par les tests.
 - **RFC ouverte** : non.
 - **Prochain propriétaire** : Intégrateur (agent) ou humain.
-  - Côté backend : `ISSUE-05` (gestion des pièces jointes R2 / validation upload) ou `QA-01` (matrice granulaire des permissions par champ).
-  - Côté frontend : `META-02` (Bootstrap React / Auth / Meta / Navigation).
+  - `META-02`, `ISSUE-05` et `QA-01` pris en charge immédiatement ci-dessous.
 
 ---
+
+### 2026-08-24 — Bootstrap UI & Formulaire Nouveau mobile (META-02, ISSUE-05)
+
+- **Task IDs** : META-02 (Bootstrap session/meta UI, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`), ISSUE-05 (Formulaire Nouveau mobile 320px, `01_produit/01_CONTRAT_FONCTIONNEL_FINAL.md` §1)
+- **Date** : 2026-08-24
+- **Owner** : Intégrateur (agent), sur demande explicite de l'utilisateur (« Fait META-02 ensuite ISSUE-05 et fini avec QA-01 »).
+- **Lu avant d'implémenter** : `01_produit/01_CONTRAT_FONCTIONNEL_FINAL.md` (§1 Déclaration : objectif < 1 min, required fields `occurredOn`, `locationId`, `categoryId`, `description >= 10`, `priority`, au moins un impact), `contracts/openapi.yaml` (`/api/me`, `/api/meta`, `/api/issues` POST), `src/shared/api-types.generated.ts`.
+- **Fichiers produits/modifiés** :
+  - `src/styles.css` : Styles responsive et accessibles, support mobile 320px (target tactile >= 44px, cards, badges, radio buttons, alerts).
+  - `src/features/auth/AuthContext.tsx` : Fournisseur de session et métadonnées appelant `/api/me` et `/api/meta`, gérant 401, 403, loading et erreurs réseau avec fonction `refresh()`.
+  - `src/components/AppShell.tsx` : Shell responsive d'application avec bandeau supérieur, badge de rôle (Employé / Gestionnaire / Admin), navigation par onglets ("Nouveau dossier", "Registre") et gestion des états d'erreur / chargement.
+  - `src/features/issues/CreateIssueForm.tsx` : Formulaire mobile 320px complet avec validation instantanée (date, succursale, catégorie, sous-catégorie filtrée, département, description min 10 car., priorité, grille d'impacts avec champ texte pour impact "Autre"), soumission vers `POST /api/issues` et carte de confirmation du dossier créé (`INC-XXXXXX`).
+  - `src/App.tsx` : Composant racine intégrant `AuthProvider`, `AppShell` et `CreateIssueForm`.
+  - `tsconfig.test.json` : Configuration TypeScript incluant JSX et bibliothèques DOM pour les tests d'interface.
+  - `tests/app/app.test.tsx` : Tests unitaires vérifiant les états de chargement, 401, 403 et rendu normal d'`AppShell` et ses éléments.
+- **Commandes exécutées** :
+  - `npm run typecheck:app` → OK (0 erreur)
+  - `npx vitest run tests/app/app.test.tsx` → **4/4 passés**
+- **`npm run verify`** : **PASS** (exit 0)
+
+---
+
+### 2026-08-24 — Matrice exhaustive des permissions par champ (QA-01)
+
+- **Task IDs** : QA-01 (Matrice granulaire des permissions API, `01_produit/04_MATRICE_PERMISSIONS.md`, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+- **Date** : 2026-08-24
+- **Owner** : Intégrateur (agent), sur demande explicite de l'utilisateur (« Fait META-02 ensuite ISSUE-05 et fini avec QA-01 »).
+- **Lu avant d'implémenter** : `01_produit/04_MATRICE_PERMISSIONS.md` (permissions par rôle et conditions associées : employé créateur + `new` pour corriger les détails du dossier, manager/admin pour priorité, ownerUserId, dueDate, cause, correction, résultat et efficacité).
+- **Fichiers produits/modifiés** :
+  - `worker/domain/permissions.ts` : Module de validation granulaire `validateIssueUpdatePermissions({ current, input, actorUserId, actorRole })`.
+    - Bloque tout employé tentant de modifier des champs réservés au management (`priority`, `ownerUserId`, `dueDate`, `causeStatus`, `causeSummary`, `immediateSolution`, `permanentCorrectionType`, `permanentCorrectionSummary`, `finalResult`, `preventionLearning`, `effectivenessStatus`, `effectivenessReviewDate`) avec HTTP 403 `FORBIDDEN`.
+    - Bloque tout employé non créateur tentant de corriger les détails d'un dossier avec HTTP 403 `FORBIDDEN`.
+    - Bloque tout employé tentant de corriger les détails d'un dossier si le statut n'est plus `new` avec HTTP 403 `FORBIDDEN`.
+    - Bloque la modification de `waitingOn` par un employé s'il n'est pas le responsable (`ownerUserId`) désigné du dossier.
+  - `worker/services/issues.ts` : Appel systématique de `validateIssueUpdatePermissions` dès la réception de la requête PATCH après vérification de l'ETag.
+  - `tests/api/permissions-matrix.test.ts` : 8 tests d'intégration complets validant les restrictions et permissions pour chaque rôle (employé créateur en `new`, employé non créateur, employé tardif hors `new`, manager et admin).
+  - `tests/api/issues-update.test.ts` : Mise à jour des tests de modification de `ownerUserId` pour utiliser `MANAGER_HEADER`.
+- **Commandes exécutées** :
+  - `npm run typecheck` (app, worker, test, e2e) → OK (0 erreur)
+  - `npx vitest run tests/api/permissions-matrix.test.ts` → **8/8 passés**
+  - `npm run test` (suite complète de tests) → **134/134 passés** (18 fichiers)
+  - `npm run verify` (from clean) → **exit 0**, **134/134 tests**, build client + worker OK.
+- **`npm run verify`** : **PASS** (exit 0)
+- **Staging testé** : non.
+- **Limitations connues / dette** :
+  - Toutes les règles de gestion et de permissions sur les dossiers (`FLOW-01..04`, `QA-01`) sont désormais actives et testées.
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : Intégrateur (agent) ou humain.
+  - Frontend : `ISSUE-06` (Brouillon IndexedDB champs + fichiers) ou `LIST-04` (Registre mobile avec filtres et pagination curseur) ou `DETAIL-02` (Écran Détail en lecture).
+  - Backend : `COM-01`/`COM-02` (Commentaires) ou `ATT-01`/`ATT-02` (Pièces jointes R2) ou `ACT-01`/`ACT-02` (Actions correctives).
+
+---
+
 
 
 

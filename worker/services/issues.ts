@@ -27,12 +27,14 @@ import { countOpenBlockingCorrectiveActions, findCorrectiveActionsByIssueId } fr
 import { insertHistoryEventStatement } from "../db/history";
 import { issueETag } from "../domain/etag";
 import { validateStatusTransition, type Role } from "../domain/transitions";
+import { validateIssueUpdatePermissions } from "../domain/permissions";
 import {
   computeDefaultReviewDate,
   validateResolutionPreconditions,
   type ApiEffectivenessStatus,
 } from "../domain/resolution";
 import type { CreateIssueInput, ListIssuesQuery, UpdateIssueInput } from "../validation/issues";
+
 
 
 
@@ -271,7 +273,10 @@ export async function updateIssue(
     throw new AppError("CONFLICT", "Le dossier a été modifié entretemps.");
   }
 
+  validateIssueUpdatePermissions({ current, input, actorUserId, actorRole });
+
   const fields: Record<string, string> = {};
+
   const columns: IssueColumnUpdates = {};
 
   const [location, category, department, subcategory, owner, waitingUser, impactTypes] = await Promise.all([
