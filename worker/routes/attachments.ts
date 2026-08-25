@@ -17,7 +17,7 @@ attachmentRoutes.get("/issues/:publicId/attachments", requireUser, async (c) => 
   if (!items) {
     throw new AppError("NOT_FOUND", "Dossier introuvable.");
   }
-  return c.json(okBody({ items }));
+  return c.json(okBody(items));
 });
 
 attachmentRoutes.post("/issues/:publicId/attachments", requireUser, async (c) => {

@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../auth/AuthContext";
 import type { components } from "../../shared/api-types.generated";
+import { CommentsSection } from "../comments/CommentsSection";
+import { AttachmentsSection } from "../attachments/AttachmentsSection";
+import { CorrectiveActionsSection } from "../corrective-actions/CorrectiveActionsSection";
+import { HistoryTimelineSection } from "../history/HistoryTimelineSection";
+import { EditIssueModal } from "./EditIssueModal";
 
 export type IssueDetail = components["schemas"]["IssueDetail"];
 export type IssueStatus = components["schemas"]["IssueStatus"];
@@ -11,12 +16,18 @@ export interface IssueDetailViewProps {
   onBack: () => void;
 }
 
+type DetailTab = "details" | "comments" | "attachments" | "actions" | "history";
+
 export function IssueDetailView({ publicId, onBack }: IssueDetailViewProps) {
-  const { meta } = useAuth();
+  const { user, meta } = useAuth();
 
   const [detail, setDetail] = useState<IssueDetail | null>(null);
+  const [etag, setEtag] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  const [activeTab, setActiveTab] = useState<DetailTab>("details");
+  const [showEditModal, setShowEditModal] = useState(false);
 
   const fetchIssue = useCallback(async () => {
     setLoading(true);
@@ -34,6 +45,7 @@ export function IssueDetailView({ publicId, onBack }: IssueDetailViewProps) {
         throw new Error(`Erreur lors de la récupération du dossier (${res.status}).`);
       }
 
+      setEtag(res.headers.get("ETag"));
       const body = (await res.json()) as components["schemas"]["IssueDetailResponse"];
       if (!body.ok || !body.data) {
         throw new Error("Réponse inattendue du serveur.");
@@ -77,7 +89,12 @@ export function IssueDetailView({ publicId, onBack }: IssueDetailViewProps) {
     );
   }
 
-  const { issue, impacts, correctiveActions } = detail;
+  const { issue, impacts } = detail;
+
+  const isManager = user?.role === "manager" || user?.role === "admin";
+  const isCreatorInNew = user?.role === "employee" && issue.createdByUserId === user?.id && issue.status === "new";
+  const isOwnerEmployee = user?.role === "employee" && issue.ownerUserId === user?.id;
+  const canEdit = isManager || isCreatorInNew || isOwnerEmployee;
 
   // Helpers de libellés
   const getLocationLabel = (locId?: number) => {
@@ -134,9 +151,21 @@ export function IssueDetailView({ publicId, onBack }: IssueDetailViewProps) {
         <button type="button" className="btn btn-secondary" onClick={onBack} data-testid="btn-back-to-list">
           ← Retour au registre
         </button>
-        <button type="button" className="btn btn-secondary" onClick={fetchIssue} style={{ fontSize: "0.85rem" }}>
-          🔄 Actualiser
-        </button>
+        <div style={{ display: "flex", gap: "0.5rem" }}>
+          {canEdit && (
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={() => setShowEditModal(true)}
+              data-testid="btn-open-edit-issue"
+            >
+              ✏️ Modifier le dossier
+            </button>
+          )}
+          <button type="button" className="btn btn-secondary" onClick={fetchIssue} style={{ fontSize: "0.85rem" }}>
+            🔄 Actualiser
+          </button>
+        </div>
       </div>
 
       {/* En-tête principal */}
@@ -158,174 +187,242 @@ export function IssueDetailView({ publicId, onBack }: IssueDetailViewProps) {
         </div>
       </div>
 
-      {/* Section 1 : Informations générales */}
-      <div className="card" style={{ marginBottom: "1rem" }}>
-        <h2 className="card-title" style={{ fontSize: "1.1rem" }}>📍 Informations générales</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem", fontSize: "0.9rem" }}>
-          <div>
-            <span style={{ color: "var(--color-text-muted)", display: "block" }}>Date de survenance :</span>
-            <strong>{issue.occurredOn}</strong>
-          </div>
-          <div>
-            <span style={{ color: "var(--color-text-muted)", display: "block" }}>Succursale :</span>
-            <strong>{getLocationLabel(issue.locationId)}</strong>
-          </div>
-          <div>
-            <span style={{ color: "var(--color-text-muted)", display: "block" }}>Département :</span>
-            <strong>{getDepartmentLabel(issue.departmentId)}</strong>
-          </div>
-          <div>
-            <span style={{ color: "var(--color-text-muted)", display: "block" }}>Catégorie :</span>
-            <strong>{getCategoryLabel(issue.categoryId)}</strong>
-          </div>
-          <div>
-            <span style={{ color: "var(--color-text-muted)", display: "block" }}>Sous-catégorie :</span>
-            <strong>{getSubcategoryLabel(issue.subcategoryId)}</strong>
-          </div>
-          <div>
-            <span style={{ color: "var(--color-text-muted)", display: "block" }}>Responsable assigné :</span>
-            <strong>{issue.ownerUserId ? `Utilisateur #${issue.ownerUserId}` : "Non assigné"}</strong>
-          </div>
-          <div>
-            <span style={{ color: "var(--color-text-muted)", display: "block" }}>Date d'échéance :</span>
-            <strong>{issue.dueDate || "Aucune"}</strong>
-          </div>
-        </div>
+      {/* Onglets de sections */}
+      <div className="tab-bar">
+        <button
+          type="button"
+          className={`tab-btn ${activeTab === "details" ? "active" : ""}`}
+          onClick={() => setActiveTab("details")}
+          data-testid="tab-details"
+        >
+          📄 Détails & Analyse
+        </button>
+        <button
+          type="button"
+          className={`tab-btn ${activeTab === "comments" ? "active" : ""}`}
+          onClick={() => setActiveTab("comments")}
+          data-testid="tab-comments"
+        >
+          💬 Commentaires
+        </button>
+        <button
+          type="button"
+          className={`tab-btn ${activeTab === "attachments" ? "active" : ""}`}
+          onClick={() => setActiveTab("attachments")}
+          data-testid="tab-attachments"
+        >
+          📎 Pièces jointes
+        </button>
+        <button
+          type="button"
+          className={`tab-btn ${activeTab === "actions" ? "active" : ""}`}
+          onClick={() => setActiveTab("actions")}
+          data-testid="tab-actions"
+        >
+          🛠️ Actions correctives
+        </button>
+        <button
+          type="button"
+          className={`tab-btn ${activeTab === "history" ? "active" : ""}`}
+          onClick={() => setActiveTab("history")}
+          data-testid="tab-history"
+        >
+          📜 Historique
+        </button>
       </div>
 
-      {/* Section 2 : Description des faits & Impacts */}
-      <div className="card" style={{ marginBottom: "1rem" }}>
-        <h2 className="card-title" style={{ fontSize: "1.1rem" }}>📝 Description des faits</h2>
-        <p style={{ whiteSpace: "pre-wrap", fontSize: "0.95rem", lineHeight: 1.6, margin: "0 0 1rem 0" }}>
-          {issue.description}
-        </p>
+      {/* Contenu de l'onglet actif */}
+      {activeTab === "details" && (
+        <>
+          {/* Section 1 : Informations générales */}
+          <div className="card" style={{ marginBottom: "1rem" }}>
+            <h2 className="card-title" style={{ fontSize: "1.1rem" }}>📍 Informations générales</h2>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem", fontSize: "0.9rem" }}>
+              <div>
+                <span style={{ color: "var(--color-text-muted)", display: "block" }}>Date de survenance :</span>
+                <strong>{issue.occurredOn}</strong>
+              </div>
+              <div>
+                <span style={{ color: "var(--color-text-muted)", display: "block" }}>Succursale :</span>
+                <strong>{getLocationLabel(issue.locationId)}</strong>
+              </div>
+              <div>
+                <span style={{ color: "var(--color-text-muted)", display: "block" }}>Département :</span>
+                <strong>{getDepartmentLabel(issue.departmentId)}</strong>
+              </div>
+              <div>
+                <span style={{ color: "var(--color-text-muted)", display: "block" }}>Catégorie :</span>
+                <strong>{getCategoryLabel(issue.categoryId)}</strong>
+              </div>
+              <div>
+                <span style={{ color: "var(--color-text-muted)", display: "block" }}>Sous-catégorie :</span>
+                <strong>{getSubcategoryLabel(issue.subcategoryId)}</strong>
+              </div>
+              <div>
+                <span style={{ color: "var(--color-text-muted)", display: "block" }}>Responsable assigné :</span>
+                <strong>{issue.ownerUserId ? `Utilisateur #${issue.ownerUserId}` : "Non assigné"}</strong>
+              </div>
+              <div>
+                <span style={{ color: "var(--color-text-muted)", display: "block" }}>Date d'échéance :</span>
+                <strong>{issue.dueDate || "Aucune"}</strong>
+              </div>
+            </div>
+          </div>
 
-        <h3 style={{ fontSize: "0.95rem", margin: "1rem 0 0.5rem 0", color: "var(--color-text-muted)" }}>
-          Impacts constatés :
-        </h3>
-        {impacts.length === 0 ? (
-          <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-muted)" }}>Aucun impact spécifié.</p>
-        ) : (
-          <ul style={{ margin: 0, paddingLeft: "1.25rem", fontSize: "0.9rem" }}>
-            {impacts.map((imp) => (
-              <li key={imp.impactTypeId} style={{ marginBottom: "0.25rem" }}>
-                <strong>{getImpactTypeLabel(imp.impactTypeId)}</strong>
-                {imp.details && <span> — {imp.details}</span>}
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
-
-      {/* Section 3 : Attente (si waiting) */}
-      {issue.status === "waiting" && issue.waitingOn && (
-        <div className="card" style={{ marginBottom: "1rem", backgroundColor: "#faf5ff", borderColor: "#e9d5ff" }}>
-          <h2 className="card-title" style={{ fontSize: "1.1rem", color: "#5b21b6" }}>⏳ Dossier en attente</h2>
-          <div style={{ fontSize: "0.9rem" }}>
-            <p style={{ margin: "0 0 0.25rem 0" }}>
-              <strong>Type d'attente :</strong>{" "}
-              {issue.waitingOn.type === "customer"
-                ? "Client"
-                : issue.waitingOn.type === "supplier"
-                ? "Fournisseur"
-                : "Utilisateur interne"}
+          {/* Section 2 : Description des faits & Impacts */}
+          <div className="card" style={{ marginBottom: "1rem" }}>
+            <h2 className="card-title" style={{ fontSize: "1.1rem" }}>📝 Description des faits</h2>
+            <p style={{ whiteSpace: "pre-wrap", fontSize: "0.95rem", lineHeight: 1.6, margin: "0 0 1rem 0" }}>
+              {issue.description}
             </p>
-            {issue.waitingOn.type === "user" && (
-              <p style={{ margin: 0 }}>
-                <strong>Utilisateur attendu :</strong> Utilisateur #{issue.waitingOn.userId}
-              </p>
-            )}
-            {(issue.waitingOn.type === "customer" || issue.waitingOn.type === "supplier") && (
-              <p style={{ margin: 0 }}>
-                <strong>Précision :</strong> {issue.waitingOn.label}
-              </p>
+
+            <h3 style={{ fontSize: "0.95rem", margin: "1rem 0 0.5rem 0", color: "var(--color-text-muted)" }}>
+              Impacts constatés :
+            </h3>
+            {impacts.length === 0 ? (
+              <p style={{ margin: 0, fontSize: "0.85rem", color: "var(--color-text-muted)" }}>Aucun impact spécifié.</p>
+            ) : (
+              <ul style={{ margin: 0, paddingLeft: "1.25rem", fontSize: "0.9rem" }}>
+                {impacts.map((imp) => (
+                  <li key={imp.impactTypeId} style={{ marginBottom: "0.25rem" }}>
+                    <strong>{getImpactTypeLabel(imp.impactTypeId)}</strong>
+                    {imp.details && <span> — {imp.details}</span>}
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
-        </div>
+
+          {/* Section 3 : Attente (si waiting) */}
+          {issue.status === "waiting" && issue.waitingOn && (
+            <div className="card" style={{ marginBottom: "1rem", backgroundColor: "#faf5ff", borderColor: "#e9d5ff" }}>
+              <h2 className="card-title" style={{ fontSize: "1.1rem", color: "#5b21b6" }}>⏳ Dossier en attente</h2>
+              <div style={{ fontSize: "0.9rem" }}>
+                <p style={{ margin: "0 0 0.25rem 0" }}>
+                  <strong>Type d'attente :</strong>{" "}
+                  {issue.waitingOn.type === "customer"
+                    ? "Client"
+                    : issue.waitingOn.type === "supplier"
+                    ? "Fournisseur"
+                    : "Utilisateur interne"}
+                </p>
+                {issue.waitingOn.type === "user" && (
+                  <p style={{ margin: 0 }}>
+                    <strong>Utilisateur attendu :</strong> Utilisateur #{issue.waitingOn.userId}
+                  </p>
+                )}
+                {(issue.waitingOn.type === "customer" || issue.waitingOn.type === "supplier") && (
+                  <p style={{ margin: 0 }}>
+                    <strong>Précision :</strong> {issue.waitingOn.label}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Section 4 : Analyse, Causes & Résolution */}
+          {(issue.causeStatus || issue.permanentCorrectionType || issue.status === "resolved") && (
+            <div className="card" style={{ marginBottom: "1rem" }}>
+              <h2 className="card-title" style={{ fontSize: "1.1rem" }}>🔍 Analyse de cause & Solutions</h2>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1rem", fontSize: "0.9rem" }}>
+                {issue.causeStatus && (
+                  <div>
+                    <span style={{ color: "var(--color-text-muted)", display: "block" }}>Statut de la cause :</span>
+                    <strong>{issue.causeStatus === "known" ? "Connue" : "À vérifier"}</strong>
+                  </div>
+                )}
+                {issue.causeSummary && (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <span style={{ color: "var(--color-text-muted)", display: "block" }}>Résumé de la cause :</span>
+                    <p style={{ margin: "0.25rem 0 0 0" }}>{issue.causeSummary}</p>
+                  </div>
+                )}
+                {issue.immediateSolution && (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <span style={{ color: "var(--color-text-muted)", display: "block" }}>Solution immédiate :</span>
+                    <p style={{ margin: "0.25rem 0 0 0" }}>{issue.immediateSolution}</p>
+                  </div>
+                )}
+                {issue.permanentCorrectionType && (
+                  <div>
+                    <span style={{ color: "var(--color-text-muted)", display: "block" }}>Type de correction permanente :</span>
+                    <strong>{issue.permanentCorrectionType}</strong>
+                  </div>
+                )}
+                {issue.permanentCorrectionSummary && (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <span style={{ color: "var(--color-text-muted)", display: "block" }}>Résumé de la correction permanente :</span>
+                    <p style={{ margin: "0.25rem 0 0 0" }}>{issue.permanentCorrectionSummary}</p>
+                  </div>
+                )}
+                {issue.finalResult && (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <span style={{ color: "var(--color-text-muted)", display: "block" }}>Résultat final :</span>
+                    <p style={{ margin: "0.25rem 0 0 0" }}>{issue.finalResult}</p>
+                  </div>
+                )}
+                {issue.preventionLearning && (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <span style={{ color: "var(--color-text-muted)", display: "block" }}>Apprentissages pour la prévention :</span>
+                    <p style={{ margin: "0.25rem 0 0 0" }}>{issue.preventionLearning}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Section 5 : Efficacité & Clôture */}
+          {issue.status === "resolved" && (
+            <div className="card" style={{ marginBottom: "1rem", backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }}>
+              <h2 className="card-title" style={{ fontSize: "1.1rem", color: "#166534" }}>✅ Clôture & Efficacité</h2>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem", fontSize: "0.9rem" }}>
+                <div>
+                  <span style={{ color: "var(--color-text-muted)", display: "block" }}>Résolu le :</span>
+                  <strong>{issue.resolvedAt ? new Date(issue.resolvedAt).toLocaleDateString("fr-CA") : "N/A"}</strong>
+                </div>
+                <div>
+                  <span style={{ color: "var(--color-text-muted)", display: "block" }}>Résolu par :</span>
+                  <strong>{issue.resolvedByUserId ? `Utilisateur #${issue.resolvedByUserId}` : "N/A"}</strong>
+                </div>
+                <div>
+                  <span style={{ color: "var(--color-text-muted)", display: "block" }}>Évaluation d'efficacité :</span>
+                  <strong>
+                    {issue.effectivenessStatus === "effective"
+                      ? "Efficace"
+                      : issue.effectivenessStatus === "ineffective"
+                      ? "Inefficace"
+                      : "En attente (Pending)"}
+                  </strong>
+                </div>
+                {issue.effectivenessReviewDate && (
+                  <div>
+                    <span style={{ color: "var(--color-text-muted)", display: "block" }}>Date de révision prévue :</span>
+                    <strong>{issue.effectivenessReviewDate}</strong>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </>
       )}
 
-      {/* Section 4 : Analyse, Causes & Résolution */}
-      {(issue.causeStatus || issue.permanentCorrectionType || issue.status === "resolved") && (
-        <div className="card" style={{ marginBottom: "1rem" }}>
-          <h2 className="card-title" style={{ fontSize: "1.1rem" }}>🔍 Analyse de cause & Solutions</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1rem", fontSize: "0.9rem" }}>
-            {issue.causeStatus && (
-              <div>
-                <span style={{ color: "var(--color-text-muted)", display: "block" }}>Statut de la cause :</span>
-                <strong>{issue.causeStatus === "known" ? "Connue" : "À vérifier"}</strong>
-              </div>
-            )}
-            {issue.causeSummary && (
-              <div style={{ gridColumn: "1 / -1" }}>
-                <span style={{ color: "var(--color-text-muted)", display: "block" }}>Résumé de la cause :</span>
-                <p style={{ margin: "0.25rem 0 0 0" }}>{issue.causeSummary}</p>
-              </div>
-            )}
-            {issue.immediateSolution && (
-              <div style={{ gridColumn: "1 / -1" }}>
-                <span style={{ color: "var(--color-text-muted)", display: "block" }}>Solution immédiate :</span>
-                <p style={{ margin: "0.25rem 0 0 0" }}>{issue.immediateSolution}</p>
-              </div>
-            )}
-            {issue.permanentCorrectionType && (
-              <div>
-                <span style={{ color: "var(--color-text-muted)", display: "block" }}>Type de correction permanente :</span>
-                <strong>{issue.permanentCorrectionType}</strong>
-              </div>
-            )}
-            {issue.permanentCorrectionSummary && (
-              <div style={{ gridColumn: "1 / -1" }}>
-                <span style={{ color: "var(--color-text-muted)", display: "block" }}>Résumé de la correction permanente :</span>
-                <p style={{ margin: "0.25rem 0 0 0" }}>{issue.permanentCorrectionSummary}</p>
-              </div>
-            )}
-            {issue.finalResult && (
-              <div style={{ gridColumn: "1 / -1" }}>
-                <span style={{ color: "var(--color-text-muted)", display: "block" }}>Résultat final :</span>
-                <p style={{ margin: "0.25rem 0 0 0" }}>{issue.finalResult}</p>
-              </div>
-            )}
-            {issue.preventionLearning && (
-              <div style={{ gridColumn: "1 / -1" }}>
-                <span style={{ color: "var(--color-text-muted)", display: "block" }}>Apprentissages pour la prévention :</span>
-                <p style={{ margin: "0.25rem 0 0 0" }}>{issue.preventionLearning}</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      {activeTab === "comments" && <CommentsSection publicId={publicId} />}
 
-      {/* Section 5 : Efficacité & Clôture */}
-      {issue.status === "resolved" && (
-        <div className="card" style={{ marginBottom: "1rem", backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }}>
-          <h2 className="card-title" style={{ fontSize: "1.1rem", color: "#166534" }}>✅ Clôture & Efficacité</h2>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem", fontSize: "0.9rem" }}>
-            <div>
-              <span style={{ color: "var(--color-text-muted)", display: "block" }}>Résolu le :</span>
-              <strong>{issue.resolvedAt ? new Date(issue.resolvedAt).toLocaleDateString("fr-CA") : "N/A"}</strong>
-            </div>
-            <div>
-              <span style={{ color: "var(--color-text-muted)", display: "block" }}>Résolu par :</span>
-              <strong>{issue.resolvedByUserId ? `Utilisateur #${issue.resolvedByUserId}` : "N/A"}</strong>
-            </div>
-            <div>
-              <span style={{ color: "var(--color-text-muted)", display: "block" }}>Évaluation d'efficacité :</span>
-              <strong>
-                {issue.effectivenessStatus === "effective"
-                  ? "Efficace"
-                  : issue.effectivenessStatus === "ineffective"
-                  ? "Inefficace"
-                  : "En attente (Pending)"}
-              </strong>
-            </div>
-            {issue.effectivenessReviewDate && (
-              <div>
-                <span style={{ color: "var(--color-text-muted)", display: "block" }}>Date de révision prévue :</span>
-                <strong>{issue.effectivenessReviewDate}</strong>
-              </div>
-            )}
-          </div>
-        </div>
+      {activeTab === "attachments" && <AttachmentsSection publicId={publicId} />}
+
+      {activeTab === "actions" && <CorrectiveActionsSection publicId={publicId} />}
+
+      {activeTab === "history" && <HistoryTimelineSection publicId={publicId} />}
+
+      {/* Modal d'édition du dossier */}
+      {showEditModal && (
+        <EditIssueModal
+          issue={issue}
+          etag={etag}
+          onClose={() => setShowEditModal(false)}
+          onSuccess={fetchIssue}
+          onReload={fetchIssue}
+        />
       )}
     </div>
   );

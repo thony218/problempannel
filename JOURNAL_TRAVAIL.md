@@ -31,7 +31,7 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 |---|---|
 | Bootstrap 0 | PRESQUE TERMINÉ — il ne reste que "CI verte" (bloqué : aucun remote Git configuré) |
 | Vague A — Fondations | TERMINÉ (FND-* + AUTH-01..05 + META-01/02 + ISSUE-01..06 + LIST-01..04 + DETAIL-01/02 + FLOW-01..04 + QA-01 faits) |
-| Vague B — Tranches verticales | EN COURS (COM-01/02, ATT-01/02, ACT-01/02, HIST-01 APIs faites ; UIs et similar links restent) |
+| Vague B — Tranches verticales | TERMINÉ (COM-01..03, ATT-01..03, ACT-01..03, HIST-01/02, FLOW-05/06 faits ; LINK-01..03 reste) |
 | Vague C | NON DÉMARRÉE |
 | Vague D | NON DÉMARRÉE |
 
@@ -549,10 +549,45 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
   - Toutes les APIs fondamentales et de tranches verticales (Commentaires, Pièces jointes R2, Actions correctives, Historique) sont terminées et 100% testées.
 - **RFC ouverte** : non.
 - **Prochain propriétaire** : Intégrateur (agent) ou humain.
-  - Frontend : `COM-03` (UI commentaires), `ATT-03` (UI pièces jointes), `ACT-03` (UI actions correctives), `HIST-02` (Timeline historique), `FLOW-05`/`FLOW-06` (Prise en charge & Conflits).
-  - Backend : `LINK-01` (Similar links API) ou `ANL-01..05` (Analytique).
+  - `COM-03`, `ATT-03`, `ACT-03`, `HIST-02`, `FLOW-05` et `FLOW-06` pris en charge immédiatement ci-dessous.
 
 ---
+
+### 2026-08-24 — Interfaces Interactives & Formulaire d'Édition / Conflits (COM-03, ATT-03, ACT-03, HIST-02, FLOW-05, FLOW-06)
+
+- **Task IDs** :
+  - `COM-03` (Section Commentaires interactive : ajout, affichage, suppression réservée aux gestionnaires avec motif, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+  - `ATT-03` (Galerie de pièces jointes avec prévisualisation images, téléchargement binaire, téléversement direct et suppression, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+  - `ACT-03` (Section Actions correctives : liste ordonnée, modale de création réservée aux gestionnaires, modale de mise à jour de statut/résultat par le responsable, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+  - `HIST-02` (Timeline d'audit visuelle : journalisation chronologique des événements avec icônes et pagination, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+  - `FLOW-05` & `FLOW-06` (Édition d'incident avec matrice de permissions et gestion des conflits de concurrence HTTP 409 avec ETag `If-Match`, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+- **Date** : 2026-08-24
+- **Owner** : Intégrateur (agent), sur demande explicite de l'utilisateur (« attaque toi a ca : COM-03, ATT-03, ACT-03, HIST-02, FLOW-05/FLOW-06 »).
+- **Lu avant d'implémenter** : `01_produit/01_CONTRAT_FONCTIONNEL_FINAL.md`, `01_produit/04_MATRICE_PERMISSIONS.md`, `01_produit/07_SCENARIOS_ACCEPTATION.md`, `contracts/openapi.yaml`.
+- **Fichiers produits/modifiés** :
+  - `src/features/comments/CommentsSection.tsx` : Composant interactif de commentaires avec formulaire d'ajout, liste dynamique et modale de soft-delete avec motif obligatoire.
+  - `src/features/attachments/AttachmentsSection.tsx` : Galerie de pièces jointes avec aperçus visuels, contrôle de quota (10 PJ) et taille (10 Mo), téléchargement direct et suppression soft-delete.
+  - `src/features/corrective-actions/CorrectiveActionsSection.tsx` : Gestion des actions correctives avec modale de création pour les gestionnaires et modale de mise à jour pour le responsable/gestionnaire.
+  - `src/features/history/HistoryTimelineSection.tsx` : Timeline visuelle avec horodatages, acteurs, libellés explicites en français et pagination.
+  - `src/features/issues/EditIssueModal.tsx` : Formulaire d'édition modal complet gérant les permissions par rôle, les transitions d'état, les motifs de réouverture et la bannière d'alerte en cas de conflit HTTP 409 avec bouton de rechargement.
+  - `src/features/issues/IssueDetailView.tsx` : Vue détaillée enrichie avec onglets (`Détails & Analyse`, `Commentaires`, `Pièces jointes`, `Actions correctives`, `Historique`), en-tête d'actions et bouton d'édition modal.
+  - `src/styles.css` : Styles responsive pour onglets, cartes de commentaires, galerie de pièces jointes, timeline et modales adaptées aux mobiles 320px.
+  - `tests/app/issue-views.test.tsx` : Tests unitaires vérifiant l'instanciation valide de tous les sous-composants et de la modale d'édition.
+- **Commandes exécutées** :
+  - `npm run typecheck` (app, worker, test, e2e) → OK (0 erreur)
+  - `npx vitest run tests/app/issue-views.test.tsx` → **2/2 passés**
+  - `npm run test` (suite complète de tests) → **152/152 passés** (24 fichiers)
+  - `npm run verify` (from clean) → **exit 0**, **152/152 tests**, build client + worker OK.
+- **`npm run verify`** : **PASS** (exit 0)
+- **Staging testé** : non.
+- **Limitations connues / dette** :
+  - La Vague B des tranches verticales est désormais quasi-complète (seul `LINK-01..03` dossiers similaires reste).
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : Intégrateur (agent) ou humain.
+  - Prochaines fonctionnalités : `LINK-01` / `LINK-02` (Suggestions & liaisons de dossiers similaires), `ANL-01..05` (Tableau de bord & analytique).
+
+---
+
 
 
 

@@ -164,8 +164,8 @@ describe("ACT-01 & ACT-02: API des actions correctives", () => {
     );
     expect(listRes.status).toBe(200);
     const listBody = (await listRes.json()) as any;
-    expect(listBody.data.items).toHaveLength(1);
-    expect(listBody.data.items[0].id).toBe(actionId);
+    expect(listBody.data).toHaveLength(1);
+    expect(listBody.data[0].id).toBe(actionId);
 
     // 2. Consultation d'une action par ID
     const getRes = await app.request(
