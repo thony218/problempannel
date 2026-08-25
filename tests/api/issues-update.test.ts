@@ -297,7 +297,7 @@ describe("PATCH /api/issues/:publicId", () => {
 
     const reopenRes = await patch(
       `/issues/${created.publicId}`,
-      { status: "inProgress" },
+      { status: "inProgress", reopenReason: "Raison de réouverture pour test." },
       { "If-Match": resolvedRes.headers.get("ETag") as string },
       MANAGER_HEADER
     );
@@ -306,6 +306,7 @@ describe("PATCH /api/issues/:publicId", () => {
     expect(reopenBody.data.issue.resolvedAt).toBeNull();
     expect(reopenBody.data.issue.resolvedByUserId).toBeNull();
   });
+
 
   it("rejects a subcategory that does not belong to the (possibly unchanged) category", async () => {
     const { publicId, etag } = await createIssue({ subcategoryId });
@@ -594,4 +595,99 @@ describe("PATCH /api/issues/:publicId", () => {
       expect(body.data.issue.effectivenessReviewDate).toBe("2026-11-15");
     });
   });
+
+  describe("Règles de réouverture FLOW-04 (S13)", () => {
+    it("rejects reopening from resolved to inProgress without reopenReason (422)", async () => {
+      const { publicId, etag } = await createIssue({ subcategoryId });
+      const resolvedRes = await patch(
+        `/issues/${publicId}`,
+        { status: "resolved", ...VALID_RESOLUTION_FIELDS },
+        { "If-Match": etag },
+        MANAGER_HEADER
+      );
+      const resolvedEtag = resolvedRes.headers.get("ETag") as string;
+
+      const res = await patch(
+        `/issues/${publicId}`,
+        { status: "inProgress" },
+        { "If-Match": resolvedEtag },
+        MANAGER_HEADER
+      );
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as any;
+      expect(body.error.fields.reopenReason).toBeDefined();
+    });
+
+    it("rejects reopening with reopenReason shorter than 5 chars (422)", async () => {
+      const { publicId, etag } = await createIssue({ subcategoryId });
+      const resolvedRes = await patch(
+        `/issues/${publicId}`,
+        { status: "resolved", ...VALID_RESOLUTION_FIELDS },
+        { "If-Match": etag },
+        MANAGER_HEADER
+      );
+      const resolvedEtag = resolvedRes.headers.get("ETag") as string;
+
+      const res = await patch(
+        `/issues/${publicId}`,
+        { status: "inProgress", reopenReason: "abc" },
+        { "If-Match": resolvedEtag },
+        MANAGER_HEADER
+      );
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as any;
+      expect(body.error.fields.reopenReason).toBeDefined();
+    });
+
+    it("S13: manager reopens with valid reopenReason, clears resolution timestamps and logs issue_reopened event", async () => {
+      const { publicId, etag } = await createIssue({ subcategoryId });
+      const resolvedRes = await patch(
+        `/issues/${publicId}`,
+        { status: "resolved", ...VALID_RESOLUTION_FIELDS },
+        { "If-Match": etag },
+        MANAGER_HEADER
+      );
+      const resolvedEtag = resolvedRes.headers.get("ETag") as string;
+
+      const reopenRes = await patch(
+        `/issues/${publicId}`,
+        { status: "inProgress", reopenReason: "Le problème persiste malgré le correctif appliqué." },
+        { "If-Match": resolvedEtag },
+        MANAGER_HEADER
+      );
+      expect(reopenRes.status).toBe(200);
+      const reopenBody = (await reopenRes.json()) as any;
+      expect(reopenBody.data.issue.status).toBe("inProgress");
+      expect(reopenBody.data.issue.resolvedAt).toBeNull();
+      expect(reopenBody.data.issue.resolvedByUserId).toBeNull();
+
+      // Vérifier la présence de l'événement issue_reopened dans issue_history
+      const issueId = Number(publicId.replace("INC-", ""));
+      const historyRows = await env.DB.prepare(
+        "SELECT event_type, payload_json FROM issue_history WHERE issue_id = ? AND event_type = 'issue_reopened'"
+      )
+        .bind(issueId)
+        .all<{ event_type: string; payload_json: string }>();
+
+      expect(historyRows.results).toHaveLength(1);
+      const payload = JSON.parse(historyRows.results[0].payload_json);
+      expect(payload.reopenReason).toBe("Le problème persiste malgré le correctif appliqué.");
+      expect(payload.fields).toContain("reopenReason");
+      expect(payload.fields).toContain("status");
+    });
+
+    it("rejects providing reopenReason when issue is not resolved (422)", async () => {
+      const { publicId, etag } = await createIssue({ subcategoryId });
+      const res = await patch(
+        `/issues/${publicId}`,
+        { description: "Mise à jour d'un ticket en cours.", reopenReason: "Tentative invalide de raison." },
+        { "If-Match": etag },
+        MANAGER_HEADER
+      );
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as any;
+      expect(body.error.fields.reopenReason).toBeDefined();
+    });
+  });
 });
+

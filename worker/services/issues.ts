@@ -464,6 +464,15 @@ export async function updateIssue(
     }
   }
 
+  const isReopening = current.status === "resolved" && nextStatusDb === "in_progress";
+  if (isReopening) {
+    if (!input.reopenReason || input.reopenReason.trim().length < 5) {
+      fields.reopenReason = "La raison de réouverture est requise (au moins 5 caractères).";
+    }
+  } else if ("reopenReason" in input && input.reopenReason != null) {
+    fields.reopenReason = "La raison de réouverture n'est valide que lors de la réouverture d'un dossier résolu.";
+  }
+
   if (input.impacts) {
     const impactsError = validateImpactsAgainstTypes(input.impacts, impactTypes!);
     if (impactsError) fields.impacts = impactsError;
@@ -500,15 +509,23 @@ export async function updateIssue(
         input.impacts.map((impact) => ({ impactTypeId: impact.impactTypeId, details: impact.details ?? null }))
       )
     : [];
+
+  const eventType = isReopening ? "issue_reopened" : "issue_updated";
+  const historyPayload: Record<string, unknown> = { fields: Object.keys(input).sort() };
+  if (isReopening && input.reopenReason) {
+    historyPayload.reopenReason = input.reopenReason;
+  }
+
   followUpStatements.push(
     insertHistoryEventStatement(db, id, {
       actorUserId,
-      eventType: "issue_updated",
-      payload: { fields: Object.keys(input).sort() },
+      eventType,
+      payload: historyPayload,
     })
   );
   await db.batch(followUpStatements);
 
   return getIssueDetail(db, publicId);
 }
+
 

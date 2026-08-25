@@ -30,7 +30,7 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 | Vague | Statut |
 |---|---|
 | Bootstrap 0 | PRESQUE TERMINÉ — il ne reste que "CI verte" (bloqué : aucun remote Git configuré) |
-| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01 + ISSUE-01/02/03/04 + LIST-01/02/03 + DETAIL-01 + FLOW-01/02/03 faits ; META-02 UI, ISSUE-05+, FLOW-04 reste) |
+| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01 + ISSUE-01/02/03/04 + LIST-01/02/03 + DETAIL-01 + FLOW-01/02/03/04 faits ; META-02 UI, ISSUE-05+ restent) |
 
 | Vague B — Tranches verticales | NON DÉMARRÉE |
 | Vague C | NON DÉMARRÉE |
@@ -399,6 +399,43 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
   - Côté frontend : `META-02` (Bootstrap React / Auth / Meta) pour démarrer l'interface.
 
 ---
+
+### 2026-08-24 — Règles de réouverture & historique (FLOW-04)
+
+- **Task IDs** : FLOW-04 (règles de réouverture et historisation de `reopenReason`, `01_produit/03_MATRICE_TRANSITIONS.md`, `01_produit/07_SCENARIOS_ACCEPTATION.md` S13)
+- **Date** : 2026-08-24
+- **Owner** : Intégrateur (agent), sur demande explicite de l'utilisateur (« Go pour Flow-04 »).
+- **Lu avant d'implémenter** : `01_produit/03_MATRICE_TRANSITIONS.md` (section `resolved → inProgress` : manager/admin, `reopenReason` requis, événement historique), `01_produit/07_SCENARIOS_ACCEPTATION.md` (S13 réouverture avec raison), `01_produit/09_CAVIARDAGE_ET_HISTORIQUE.md` (gestion de l'historique et des motifs d'audit), `contracts/openapi.yaml` (`reopenReason` minLength: 5, maxLength: 1000).
+- **Fichiers produits/modifiés** :
+  - `worker/services/issues.ts` :
+    - Détecte la transition de réouverture (`current.status === "resolved"` et `nextStatusDb === "in_progress"`).
+    - Valide que `reopenReason` est fourni et fait au moins 5 caractères (`fields.reopenReason`, HTTP 422 si absent ou trop court).
+    - Refuse l'envoi de `reopenReason` lors d'une mise à jour qui n'est pas une réouverture (`fields.reopenReason`, HTTP 422).
+    - Émet un événement d'historique dédié `eventType: "issue_reopened"` dans `issue_history` avec `payload: { reopenReason, fields }` lors de la réouverture (au lieu de `issue_updated`).
+    - Réinitialise `resolved_at` et `resolved_by_user_id` à `NULL`.
+  - Tests (`tests/api/issues-update.test.ts`) :
+    - Mise à jour du test de cycle de vie pour fournir `reopenReason` lors de la réouverture.
+    - Ajout de 4 cas de test spécifiques pour `FLOW-04` (S13) :
+      - Rejet 422 si `reopenReason` est omis lors d'une réouverture.
+      - Rejet 422 si `reopenReason` fait moins de 5 caractères.
+      - Réouverture réussie (200) par un manager avec `reopenReason` valide, vérification de la réinitialisation de `resolvedAt`/`resolvedByUserId` et présence de l'événement `issue_reopened` dans `issue_history` avec le motif.
+      - Rejet 422 si `reopenReason` est fourni sur un dossier non résolu.
+- **Commandes exécutées** :
+  - `npm run typecheck` (app, worker, test, e2e) → OK (0 erreur)
+  - `npx vitest run tests/api/issues-update.test.ts` → **36/36 passés**
+  - `npm run test` (suite complète de tests) → **120/120 passés** (16 fichiers)
+  - `npm run verify` (from clean) → **exit 0**, **120/120 tests**
+- **`npm run verify`** : **PASS** (exit 0)
+- **Staging testé** : non.
+- **Limitations connues / dette** :
+  - L'ensemble des règles de workflow de base (`FLOW-01`, `FLOW-02`, `FLOW-03`, `FLOW-04`) est maintenant intégralement implémenté et couvert par les tests.
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : Intégrateur (agent) ou humain.
+  - Côté backend : `ISSUE-05` (gestion des pièces jointes R2 / validation upload) ou `QA-01` (matrice granulaire des permissions par champ).
+  - Côté frontend : `META-02` (Bootstrap React / Auth / Meta / Navigation).
+
+---
+
 
 
 
