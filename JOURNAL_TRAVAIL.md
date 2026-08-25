@@ -929,3 +929,23 @@ Le parcours E2E n'était pas écrivable avant que l'identité de développement 
 - **Prochain propriétaire** : Codex après approbation explicite de l'utilisateur, pour appliquer les migrations D1 et les référentiels, créer le seul administrateur pilote, déployer le Worker puis vérifier Access (anonyme et authentifié).
 
 ---
+
+### 2026-08-24 — Promotion de deux administrateurs du pilote
+
+- **Task IDs** : `OPS-02` (gestion d'accès applicatif du pilote).
+- **Date** : 2026-08-24
+- **Owner** : Codex, sur autorisation explicite de l'utilisateur.
+- **Sauvegarde** : copie complète créée avant la consignation dans `/Users/anthobruneau/Downloads/Back up Codex/registre_erreurs_v4_final_2026-08-24_promotion-admins-pilote`.
+- **Fichiers modifiés** : `JOURNAL_TRAVAIL.md`. La ressource externe modifiée est la table `users` du D1 de production.
+- **Accès appliqué** : les deux adresses déjà autorisées par Cloudflare Access disposent désormais du rôle interne `admin` et sont actives.
+- **Commandes et résultats** :
+  - tentative `BEGIN IMMEDIATE ...` → refusée par l'API D1 (les transactions SQL explicites ne sont pas admises); aucune écriture effectuée.
+  - `wrangler d1 execute DB --remote --env production --command "INSERT ... VALUES (...), (...) ON CONFLICT ..."` → **PASS**, une écriture atomique D1, 2 lignes créées ou promues.
+  - vérification distante `SELECT COUNT(*) ...` → **PASS**, 2 administrateurs demandés actifs.
+- **`npm run verify`** : non relancé : aucune source applicative ni configuration de build n'a changé.
+- **Staging / authentification réelle** : non rejoué; la réception des codes à usage unique Cloudflare reste une dépendance de messagerie/identité externe.
+- **Limitations connues / confidentialité** : l'autorisation couvre les administrateurs internes; elle ne remplace pas le gate de confidentialité pour l'ajout de données réelles.
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : propriétaire Cloudflare, pour effectuer une connexion réelle avec les administrateurs et confirmer la livraison des codes à usage unique.
+
+---
