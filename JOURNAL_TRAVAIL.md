@@ -883,6 +883,29 @@ Le parcours E2E n'était pas écrivable avant que l'identité de développement 
 
 ---
 
+### 2026-08-24 — Déploiement pilote protégé sur `problems.chamaran.com`
+
+- **Task IDs** : `OPS-01`, `OPS-02` (réalisation pilote contrôlée).
+- **Date** : 2026-08-24
+- **Owner** : Codex, sur autorisation explicite de l'utilisateur de remplacer DXMARKET.
+- **Sauvegarde** : copie complète créée avant la consignation dans `/Users/anthobruneau/Downloads/Back up Codex/registre_erreurs_v4_final_2026-08-24_deploiement-pilote-problems`.
+- **Fichiers modifiés** : `JOURNAL_TRAVAIL.md`. Les ressources Cloudflare modifiées sont le D1 `registre-erreurs-prod` et le Worker `registre-erreurs`.
+- **Données pilote** : migration `0001_core.sql` appliquée, référentiels chargés (1 site, 7 départements, 9 catégories) et un seul administrateur interne propriétaire créé. Aucun compte employé interne ni dossier réel n'a été créé.
+- **Commandes et résultats** :
+  - `wrangler d1 migrations apply DB --remote --env production` → **PASS**, 34 commandes, migration `0001_core.sql` appliquée.
+  - `wrangler d1 execute DB --remote --env production --file seed/reference.sql` → **PASS**, 39 requêtes, 163 écritures de référentiels.
+  - `wrangler d1 execute DB --remote --env production --command ...` → **PASS**, administrateur pilote créé.
+  - `npm run deploy:production` → **PASS** : Worker `registre-erreurs` déployé sur `problems.chamaran.com`; version `6eb7fc22-9633-4054-9c86-bc73eb5d4da3`.
+  - Vérification distante D1 → **PASS** : 1 utilisateur, 1 site, 7 départements, 9 catégories.
+  - `curl -I https://problems.chamaran.com/api/health` → **PASS périmètre** : redirection 302 Cloudflare Access avec l'audience attendue.
+- **`npm run verify`** : **PASS** dans l'intervention de préparation du 2026-08-24 (221 tests); non relancé après ce déploiement, car le code applicatif n'a pas changé.
+- **Staging / authentification réelle** : le périmètre Access et le routage du Worker sont confirmés, mais la requête authentifiée n'a pas pu être rejouée : la réception du code à usage unique reste à résoudre côté messagerie/identité Cloudflare.
+- **Limitations connues / confidentialité** : le gate de confidentialité n'est pas formellement approuvé. Les deux adresses employées autorisées dans Access peuvent passer le périmètre, mais ne disposent pas de compte interne et seront donc refusées par l'application; aucune donnée réelle ne doit être saisie avant l'approbation du gate.
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : responsable confidentialité et propriétaire de l'identité Cloudflare, pour le gate puis le test authentifié avant tout ajout d'utilisateur interne ou de donnée réelle.
+
+---
+
 ### 2026-08-24 — Préparation de production GitHub / Cloudflare
 
 - **Task IDs** : `OPS-01`, `OPS-02` (provisionnement et validation réelle, phase préparatoire).
