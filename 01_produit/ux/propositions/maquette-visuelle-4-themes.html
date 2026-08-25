@@ -1,0 +1,2143 @@
+<title>Maquette du Registre</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Chivo:wght@600;700;900&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Newsreader:opsz,wght@6..72,400;6..72,500;6..72,600&family=Overpass:wght@400;600;700;800&family=Public+Sans:wght@400;500;600;700&display=swap">
+
+<style>
+/* ============================================================
+   MAQUETTE — Registre des erreurs
+   Système de thèmes : tout passe par des variables CSS.
+   Un thème = couleurs + typographie + rayons + filets + densité.
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* ---------- THÈME 1 — ATELIER (défaut) ----------------------
+   Tableau d'atelier : béton clair, filets fins, encre noire,
+   orange signal réservé à ce qui exige une action.            */
+:root,
+:root[data-mq="atelier"] {
+  color-scheme: light;
+
+  --bg:#E8EAE6;  --bg-2:#DEE2DC;
+  --surface:#FFFFFF; --surface-2:#F4F5F2; --surface-3:#ECEEEA;
+  --ink:#14181A; --ink-2:#4C5754; --ink-3:#66706C; --ink-inv:#FFFFFF;
+  --line:#CDD2CC; --line-strong:#A7AFA8; --bw:1px;
+
+  --accent:#1B2A2E; --accent-ink:#FFFFFF; --accent-soft:#E4E9E8;
+  --signal:#C63A11; --signal-soft:#FBEAE4;
+  --focus:#C63A11;
+
+  --st-new-fg:#3D4A4E;  --st-new-bg:#EDF0EF;
+  --st-prog-fg:#1D5C86; --st-prog-bg:#E8F1F8;
+  --st-wait-fg:#8A5A00; --st-wait-bg:#FBF2E0;
+  --st-done-fg:#1C6B4A; --st-done-bg:#E6F3ED;
+
+  --pr-urg-fg:#A62C0C; --pr-urg-bg:#FBEAE4; --pr-urg-bar:#C63A11;
+  --pr-imp-fg:#8A5A00; --pr-imp-bg:#FBF2E0; --pr-imp-bar:#C08A1E;
+  --pr-nor-fg:#4C5754; --pr-nor-bg:#EFF1EE; --pr-nor-bar:#B7BEB8;
+
+  --ok:#1C6B4A;   --ok-bg:#E6F3ED;
+  --warn:#8A5A00; --warn-bg:#FBF2E0;
+  --crit:#A62C0C; --crit-bg:#FBEAE4;
+
+  --data:#3F6E86; --data-soft:#E4EDF2; --grid:#E3E6E2;
+
+  --badge-bd: transparent;
+  --r-ctl:3px; --r-card:4px; --r-pill:3px;
+  --sh-1: 2px 2px 0 rgba(20,24,26,.055);
+  --sh-2: 4px 4px 0 rgba(20,24,26,.09);
+  --sh-pop: 6px 6px 0 rgba(20,24,26,.14);
+
+  --font-display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --font-ui:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+
+  --fs-base:15px; --lh:1.52;
+  --display-w:700; --display-ls:-0.02em;
+  --label-tr:uppercase; --label-ls:.09em; --label-w:600; --label-fs:10.5px;
+  --label-font:var(--font-ui);
+  --ref-font:var(--font-mono); --ref-tr:none;
+
+  --pad-card:17px; --gap:13px; --gap-lg:20px; --touch:44px;
+  --rail-w:212px;
+  --page-texture:none;
+}
+
+/* ---------- THÈME 2 — ARDOISE -------------------------------
+   Registre de direction : bleu-gris froid, teal profond,
+   titres en romain, beaucoup d'air. Fait pour lire et décider. */
+:root[data-mq="ardoise"] {
+  color-scheme: light;
+
+  --bg:#F1F4F6;  --bg-2:#E6ECEF;
+  --surface:#FFFFFF; --surface-2:#F7F9FA; --surface-3:#EFF4F6;
+  --ink:#0F1A21; --ink-2:#485A64; --ink-3:#64757E; --ink-inv:#FFFFFF;
+  --line:#DCE4E8; --line-strong:#BCC9D0; --bw:1px;
+
+  --accent:#0E6E77; --accent-ink:#FFFFFF; --accent-soft:#E1F0F1;
+  --signal:#A83421; --signal-soft:#FAEBE7;
+  --focus:#0E6E77;
+
+  --st-new-fg:#4A5A64;  --st-new-bg:#EDF2F4;
+  --st-prog-fg:#1F6187; --st-prog-bg:#E8F1F6;
+  --st-wait-fg:#8A5F14; --st-wait-bg:#FAF1E2;
+  --st-done-fg:#2A7050; --st-done-bg:#E7F2EC;
+
+  --pr-urg-fg:#A83421; --pr-urg-bg:#FAEBE7; --pr-urg-bar:#BF4128;
+  --pr-imp-fg:#8A5F14; --pr-imp-bg:#FAF1E2; --pr-imp-bar:#C79430;
+  --pr-nor-fg:#485A64; --pr-nor-bg:#EEF2F4; --pr-nor-bar:#C3CFD5;
+
+  --ok:#2A7050;   --ok-bg:#E7F2EC;
+  --warn:#8A5F14; --warn-bg:#FAF1E2;
+  --crit:#A83421; --crit-bg:#FAEBE7;
+
+  --data:#0E6E77; --data-soft:#DDEEEF; --grid:#E9EFF2;
+
+  --badge-bd: transparent;
+  --r-ctl:10px; --r-card:16px; --r-pill:999px;
+  --sh-1: 0 1px 2px rgba(15,26,33,.06);
+  --sh-2: 0 1px 2px rgba(15,26,33,.05), 0 14px 32px -20px rgba(15,26,33,.42);
+  --sh-pop: 0 24px 60px -28px rgba(15,26,33,.5), 0 2px 6px rgba(15,26,33,.06);
+
+  --font-display:"Newsreader",Georgia,"Times New Roman",serif;
+  --font-ui:"Public Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+
+  --fs-base:16px; --lh:1.6;
+  --display-w:500; --display-ls:-0.012em;
+  --label-tr:uppercase; --label-ls:.07em; --label-w:600; --label-fs:10.5px;
+  --label-font:var(--font-ui);
+  --ref-font:var(--font-mono); --ref-tr:none;
+
+  --pad-card:24px; --gap:18px; --gap-lg:28px; --touch:44px;
+  --rail-w:236px;
+  --page-texture:none;
+}
+
+/* ---------- THÈME 3 — POSTE DE NUIT -------------------------
+   Console de répartition : fond sombre, trame de points,
+   chiffres monospacés, statuts entre crochets.                */
+:root[data-mq="nuit"] {
+  color-scheme: dark;
+
+  --bg:#0B1013;  --bg-2:#0E1519;
+  --surface:#141C21; --surface-2:#18232A; --surface-3:#1D2A31;
+  --ink:#E4EDF1; --ink-2:#93A6AF; --ink-3:#86999F; --ink-inv:#06171F;
+  --line:#2B3A43; --line-strong:#3F5560; --bw:1px;
+
+  --accent:#5FB3D9; --accent-ink:#06171F; --accent-soft:#12303D;
+  --signal:#FF7A6B; --signal-soft:#33191A;
+  --focus:#7FD1F0;
+
+  --st-new-fg:#9DB1BB;  --st-new-bg:#1B262C;
+  --st-prog-fg:#6FC0E8; --st-prog-bg:#102A36;
+  --st-wait-fg:#E5A93F; --st-wait-bg:#2E2312;
+  --st-done-fg:#54C68F; --st-done-bg:#122E22;
+
+  --pr-urg-fg:#FF7A6B; --pr-urg-bg:#33191A; --pr-urg-bar:#FF5A47;
+  --pr-imp-fg:#E5A93F; --pr-imp-bg:#2E2312; --pr-imp-bar:#E5A93F;
+  --pr-nor-fg:#93A6AF; --pr-nor-bg:#1B262C; --pr-nor-bar:#3F5560;
+
+  --ok:#54C68F;   --ok-bg:#122E22;
+  --warn:#E5A93F; --warn-bg:#2E2312;
+  --crit:#FF7A6B; --crit-bg:#33191A;
+
+  --data:#5FB3D9; --data-soft:#16303C; --grid:#1E2A31;
+
+  --badge-bd: transparent;
+  --r-ctl:6px; --r-card:8px; --r-pill:4px;
+  --sh-1: 0 1px 0 rgba(255,255,255,.03) inset;
+  --sh-2: 0 18px 40px -26px rgba(0,0,0,.9), 0 1px 0 rgba(255,255,255,.04) inset;
+  --sh-pop: 0 30px 70px -30px rgba(0,0,0,1);
+
+  --font-display:"Chivo","Helvetica Neue",Arial,sans-serif;
+  --font-ui:"IBM Plex Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+
+  --fs-base:15px; --lh:1.55;
+  --display-w:700; --display-ls:-0.015em;
+  --label-tr:uppercase; --label-ls:.12em; --label-w:500; --label-fs:10px;
+  --label-font:var(--font-mono);
+  --ref-font:var(--font-mono); --ref-tr:none;
+
+  --pad-card:18px; --gap:14px; --gap-lg:22px; --touch:44px;
+  --rail-w:220px;
+  --page-texture:radial-gradient(rgba(95,179,217,.07) 1px, transparent 1px);
+}
+
+/* ---------- THÈME 4 — HAUTE VISIBILITÉ ----------------------
+   Terrain : noir sur blanc, filets 2 px, jaune sécurité,
+   cibles 56 px, texte plus gros. Gants, camion, plein soleil. */
+:root[data-mq="hv"] {
+  color-scheme: light;
+
+  --bg:#FFFFFF;  --bg-2:#EDEDED;
+  --surface:#FFFFFF; --surface-2:#F4F4F4; --surface-3:#E8E8E8;
+  --ink:#000000; --ink-2:#2B2B2B; --ink-3:#4A4A4A; --ink-inv:#000000;
+  --line:#000000; --line-strong:#000000; --bw:2px;
+
+  --accent:#FFD100; --accent-ink:#000000; --accent-soft:#FFF6CC;
+  --signal:#C10000; --signal-soft:#FBE3E3;
+  --focus:#0033CC;
+
+  --st-new-fg:#000000;  --st-new-bg:#FFFFFF;
+  --st-prog-fg:#003C8F; --st-prog-bg:#E3EDFB;
+  --st-wait-fg:#8A4B00; --st-wait-bg:#FDF0DE;
+  --st-done-fg:#00623A; --st-done-bg:#E0F2E9;
+
+  --pr-urg-fg:#FFFFFF; --pr-urg-bg:#C10000; --pr-urg-bar:#C10000;
+  --pr-imp-fg:#000000; --pr-imp-bg:#FFD100; --pr-imp-bar:#FFD100;
+  --pr-nor-fg:#000000; --pr-nor-bg:#FFFFFF; --pr-nor-bar:#000000;
+
+  --ok:#00623A;   --ok-bg:#E0F2E9;
+  --warn:#8A4B00; --warn-bg:#FDF0DE;
+  --crit:#C10000; --crit-bg:#FBE3E3;
+
+  --data:#0040A8; --data-soft:#DCE6F7; --grid:#D6D6D6;
+
+  --badge-bd: currentColor;
+  --r-ctl:0px; --r-card:0px; --r-pill:0px;
+  --sh-1: none;
+  --sh-2: none;
+  --sh-pop: 8px 8px 0 #000000;
+
+  --font-display:"Overpass","Helvetica Neue",Arial,sans-serif;
+  --font-ui:"Overpass",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+
+  --fs-base:17px; --lh:1.5;
+  --display-w:800; --display-ls:-0.01em;
+  --label-tr:uppercase; --label-ls:.05em; --label-w:800; --label-fs:12px;
+  --label-font:var(--font-ui);
+  --ref-font:var(--font-mono); --ref-tr:none;
+
+  --pad-card:20px; --gap:16px; --gap-lg:24px; --touch:56px;
+  --rail-w:228px;
+  --page-texture:none;
+}
+</style>
+<style>
+/* ============================================================
+   BASE
+   ============================================================ */
+body {
+  margin:0;
+  background:var(--bg-2);
+  color:var(--ink);
+  font-family:var(--font-ui);
+  font-size:var(--fs-base);
+  line-height:var(--lh);
+  -webkit-font-smoothing:antialiased;
+  transition:background-color .28s ease, color .28s ease;
+}
+h1,h2,h3,h4 { font-family:var(--font-display); font-weight:var(--display-w); letter-spacing:var(--display-ls); margin:0; text-wrap:balance; }
+p { margin:0; }
+button, input, select, textarea { font:inherit; color:inherit; }
+button { cursor:pointer; }
+:focus-visible { outline:2px solid var(--focus); outline-offset:2px; border-radius:2px; }
+:root[data-mq="hv"] :focus-visible { outline-width:3px; outline-offset:3px; }
+ul,ol { margin:0; padding:0; list-style:none; }
+table { border-collapse:collapse; width:100%; }
+svg { display:block; }
+.num { font-variant-numeric:tabular-nums; }
+
+.label {
+  font-family:var(--label-font);
+  font-size:var(--label-fs);
+  font-weight:var(--label-w);
+  letter-spacing:var(--label-ls);
+  text-transform:var(--label-tr);
+  color:var(--ink-3);
+}
+.ref {
+  font-family:var(--ref-font);
+  font-variant-numeric:tabular-nums;
+  letter-spacing:.01em;
+  font-weight:600;
+}
+.sr { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration:.001ms !important; transition-duration:.001ms !important; }
+}
+
+/* ============================================================
+   ATELIER DE PRÉSENTATION (chrome autour de la maquette)
+   ============================================================ */
+.studio { min-height:100vh; background:var(--bg-2); }
+
+.studio-bar {
+  position:sticky; top:0; z-index:40;
+  display:flex; flex-wrap:wrap; align-items:center; gap:14px 22px;
+  padding:12px clamp(14px, 3vw, 30px);
+  background:var(--surface);
+  border-bottom:var(--bw) solid var(--line);
+}
+.studio-id { display:flex; align-items:center; gap:11px; margin-right:auto; }
+.studio-mark {
+  width:30px; height:30px; flex:none;
+  display:grid; place-items:center;
+  background:var(--accent); color:var(--accent-ink);
+  border-radius:var(--r-ctl);
+  font-family:var(--font-display); font-weight:800; font-size:15px; letter-spacing:0;
+}
+:root[data-mq="hv"] .studio-mark { border:2px solid var(--ink); }
+.studio-name { font-family:var(--font-display); font-weight:var(--display-w); font-size:16px; letter-spacing:var(--display-ls); }
+.studio-sub { display:block; font-family:var(--font-ui); font-size:11.5px; font-weight:400; letter-spacing:0; color:var(--ink-3); }
+
+.ctl-group { display:flex; align-items:center; gap:9px; }
+.ctl-group > .label { white-space:nowrap; }
+
+.swatches { display:flex; gap:7px; flex-wrap:wrap; }
+.swatch {
+  display:flex; align-items:center; gap:8px;
+  padding:5px 11px 5px 6px;
+  background:var(--surface-2);
+  border:var(--bw) solid var(--line);
+  border-radius:var(--r-pill);
+  font-size:12.5px; font-weight:500; color:var(--ink-2);
+  transition:border-color .15s, color .15s, background-color .15s;
+}
+.swatch:hover { color:var(--ink); border-color:var(--line-strong); }
+.swatch[aria-pressed="true"] { background:var(--accent-soft); border-color:var(--accent); color:var(--ink); font-weight:600; }
+:root[data-mq="hv"] .swatch[aria-pressed="true"] { background:var(--accent); }
+.chip-dots { display:flex; }
+.chip-dots i {
+  width:11px; height:16px; display:block;
+  border:1px solid rgba(0,0,0,.16);
+  border-radius:1px;
+}
+.chip-dots i + i { margin-left:-1px; }
+
+.seg { display:flex; background:var(--surface-2); border:var(--bw) solid var(--line); border-radius:var(--r-pill); padding:3px; gap:3px; }
+.seg button {
+  border:0; background:transparent; color:var(--ink-3);
+  padding:5px 13px; border-radius:calc(var(--r-pill) - 2px);
+  font-size:12.5px; font-weight:600;
+}
+.seg button[aria-pressed="true"] { background:var(--accent); color:var(--accent-ink); }
+
+/* Bandeau d'intention du thème */
+.theme-note {
+  display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 16px;
+  padding:13px clamp(14px, 3vw, 30px);
+  background:var(--surface-3);
+  border-bottom:var(--bw) solid var(--line);
+}
+.theme-note h2 { font-size:14.5px; }
+.theme-note p { font-size:13.5px; color:var(--ink-2); max-width:74ch; }
+.theme-note .usage { font-family:var(--label-font); font-size:var(--label-fs); letter-spacing:var(--label-ls); text-transform:var(--label-tr); color:var(--ink-3); margin-left:auto; white-space:nowrap; }
+
+/* Scène : la maquette elle-même */
+.stage-wrap {
+  padding:clamp(16px, 3vw, 34px) clamp(10px, 3vw, 30px);
+  display:flex; justify-content:center;
+  background:
+    var(--page-texture),
+    var(--bg-2);
+  background-size:22px 22px;
+}
+.stage {
+  container-type:inline-size;
+  width:100%; max-width:1180px;
+  background:var(--bg);
+  border:var(--bw) solid var(--line);
+  border-radius:var(--r-card);
+  box-shadow:var(--sh-2);
+  overflow:hidden;
+  transition:max-width .3s ease;
+}
+.stage[data-vp="mobile"] { max-width:392px; }
+
+/* Sections d'analyse sous la scène */
+.doc-section {
+  max-width:1180px; margin:0 auto;
+  padding:clamp(26px,4vw,46px) clamp(14px,3vw,30px);
+}
+.doc-head { margin-bottom:22px; }
+.doc-head h2 { font-size:clamp(19px,2.4vw,25px); margin-bottom:6px; }
+.doc-head p { color:var(--ink-2); font-size:14px; max-width:70ch; }
+.doc-rule { height:var(--bw); background:var(--line); max-width:1180px; margin:0 auto; }
+
+.studio-foot {
+  padding:26px clamp(14px,3vw,30px) 44px;
+  max-width:1180px; margin:0 auto;
+  color:var(--ink-3); font-size:12.5px;
+  display:flex; flex-wrap:wrap; gap:8px 20px;
+}
+</style>
+<style>
+/* ============================================================
+   COQUILLE APPLICATIVE
+   ============================================================ */
+.app { display:grid; grid-template-columns:var(--rail-w) 1fr; min-height:700px; background:var(--bg); }
+
+.rail { display:flex; flex-direction:column; background:var(--surface); border-right:var(--bw) solid var(--line); }
+.rail-brand { display:flex; align-items:center; gap:10px; padding:16px 16px 14px; border-bottom:var(--bw) solid var(--line); }
+.rail-brand .studio-mark { width:28px; height:28px; font-size:14px; }
+.rail-brand b { font-family:var(--font-display); font-weight:var(--display-w); font-size:14.5px; letter-spacing:var(--display-ls); line-height:1.15; }
+.rail-brand span { display:block; font-family:var(--font-ui); font-weight:400; font-size:10.5px; color:var(--ink-3); letter-spacing:0; }
+
+.rail-nav { padding:12px 10px; display:flex; flex-direction:column; gap:3px; flex:1; }
+.rail-nav .label { padding:8px 8px 5px; }
+.navitem {
+  display:flex; align-items:center; gap:10px;
+  width:100%; min-height:var(--touch); padding:0 11px;
+  border:0; border-radius:var(--r-ctl); background:transparent;
+  color:var(--ink-2); font-size:14px; font-weight:500; text-align:left;
+  transition:background-color .14s, color .14s;
+}
+.navitem:hover { background:var(--surface-2); color:var(--ink); }
+.navitem[aria-current="page"] { background:var(--accent-soft); color:var(--ink); font-weight:600; }
+.navitem svg { width:17px; height:17px; flex:none; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; opacity:.85; }
+.navitem .count { margin-left:auto; font-family:var(--font-mono); font-size:11px; color:var(--ink-3); font-variant-numeric:tabular-nums; }
+.navitem[aria-current="page"] .count { color:var(--ink-2); }
+
+.rail-user { padding:12px; border-top:var(--bw) solid var(--line); display:flex; align-items:center; gap:10px; }
+.avatar {
+  width:32px; height:32px; flex:none; border-radius:var(--r-pill);
+  background:var(--surface-3); border:var(--bw) solid var(--line-strong);
+  display:grid; place-items:center; font-size:12px; font-weight:700; color:var(--ink-2);
+  font-family:var(--font-display);
+}
+.rail-user b { font-size:13px; font-weight:600; display:block; line-height:1.25; }
+.rail-user span { font-size:11px; color:var(--ink-3); }
+
+.app-main { display:flex; flex-direction:column; min-width:0; }
+.topbar {
+  display:flex; align-items:center; gap:10px;
+  padding:11px clamp(12px,2vw,20px);
+  background:var(--surface); border-bottom:var(--bw) solid var(--line);
+}
+.topbar-brand { display:none; align-items:center; gap:9px; margin-right:auto; }
+.topbar-search { position:relative; flex:1; max-width:400px; }
+.topbar-search svg { position:absolute; left:11px; top:50%; transform:translateY(-50%); width:15px; height:15px; stroke:var(--ink-3); fill:none; stroke-width:1.8; }
+.topbar-search input { padding-left:33px; }
+.topbar-actions { margin-left:auto; display:flex; align-items:center; gap:9px; }
+.iconbtn {
+  width:var(--touch); height:var(--touch); display:grid; place-items:center;
+  border:var(--bw) solid var(--line); border-radius:var(--r-ctl);
+  background:var(--surface); color:var(--ink-2);
+}
+.iconbtn svg { width:17px; height:17px; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; }
+.iconbtn:hover { color:var(--ink); border-color:var(--line-strong); }
+
+.canvas { flex:1; padding:clamp(15px,2.3vw,26px); min-width:0; }
+.screen { display:none; }
+.screen.is-active { display:block; animation:screen-in .26s ease both; }
+@keyframes screen-in { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:none; } }
+
+.tabbar { display:none; border-top:var(--bw) solid var(--line); background:var(--surface); }
+.tabbar button {
+  flex:1; border:0; background:transparent; color:var(--ink-3);
+  padding:9px 2px 10px; display:flex; flex-direction:column; align-items:center; gap:4px;
+  font-size:10.5px; font-weight:600; min-height:58px;
+}
+.tabbar button svg { width:19px; height:19px; stroke:currentColor; fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+.tabbar button[aria-current="page"] { color:var(--ink); }
+.tabbar button[aria-current="page"] svg { stroke:var(--accent); }
+:root[data-mq="atelier"] .tabbar button[aria-current="page"] svg { stroke:var(--signal); }
+.tabbar .fab { flex:none; width:64px; }
+.tabbar .fab i {
+  display:grid; place-items:center; width:42px; height:34px;
+  background:var(--accent); color:var(--accent-ink); border-radius:var(--r-ctl);
+  font-style:normal; font-size:19px; font-weight:600; line-height:1;
+}
+
+/* ---------- En-tête d'écran ---------- */
+.page-head { display:flex; flex-wrap:wrap; align-items:flex-end; gap:12px 18px; margin-bottom:var(--gap-lg); }
+.page-head .eyebrow { display:block; margin-bottom:5px; }
+.page-head h1 { font-size:clamp(21px,2.7vw,28px); line-height:1.14; }
+.page-head p { color:var(--ink-2); font-size:14px; margin-top:6px; max-width:64ch; }
+.page-head-actions { margin-left:auto; display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+
+/* ---------- Boutons ---------- */
+.btn {
+  display:inline-flex; align-items:center; justify-content:center; gap:8px;
+  min-height:var(--touch); padding:0 16px;
+  border:var(--bw) solid transparent; border-radius:var(--r-ctl);
+  background:var(--surface-2); color:var(--ink);
+  font-size:14px; font-weight:600; white-space:nowrap;
+  transition:transform .12s ease, box-shadow .12s ease, background-color .14s ease;
+}
+.btn svg { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:1.9; stroke-linecap:round; stroke-linejoin:round; }
+.btn--primary { background:var(--accent); color:var(--accent-ink); box-shadow:var(--sh-1); }
+.btn--primary:hover { box-shadow:var(--sh-2); }
+.btn--secondary { background:var(--surface); border-color:var(--line-strong); color:var(--ink); }
+.btn--secondary:hover { background:var(--surface-2); }
+.btn--ghost { background:transparent; color:var(--ink-2); }
+.btn--ghost:hover { background:var(--surface-2); color:var(--ink); }
+.btn--danger { background:var(--crit-bg); color:var(--crit); border-color:currentColor; }
+.btn--sm { min-height:calc(var(--touch) - 12px); padding:0 11px; font-size:12.5px; }
+.btn[disabled] { opacity:.5; }
+
+/* ---------- Badges statut / priorité ---------- */
+.badge {
+  display:inline-flex; align-items:center; gap:5px;
+  padding:3px 9px; border-radius:var(--r-pill);
+  border:1px solid var(--badge-bd);
+  font-size:11.5px; font-weight:600; letter-spacing:.012em; white-space:nowrap;
+}
+.badge i { font-style:normal; font-size:9.5px; line-height:1; }
+.badge--new  { background:var(--st-new-bg);  color:var(--st-new-fg); }
+.badge--prog { background:var(--st-prog-bg); color:var(--st-prog-fg); }
+.badge--wait { background:var(--st-wait-bg); color:var(--st-wait-fg); }
+.badge--done { background:var(--st-done-bg); color:var(--st-done-fg); }
+.badge--urgent { background:var(--pr-urg-bg); color:var(--pr-urg-fg); }
+.badge--important { background:var(--pr-imp-bg); color:var(--pr-imp-fg); }
+.badge--normal { background:var(--pr-nor-bg); color:var(--pr-nor-fg); }
+.badge--late { background:var(--crit-bg); color:var(--crit); }
+.badge--role { background:var(--surface-3); color:var(--ink-2); }
+
+/* ---------- Carte dossier ---------- */
+.list { display:flex; flex-direction:column; gap:var(--gap); }
+.issue {
+  display:grid; grid-template-columns:4px 1fr;
+  background:var(--surface); border:var(--bw) solid var(--line);
+  border-radius:var(--r-card); overflow:hidden;
+  box-shadow:var(--sh-1);
+  text-align:left; width:100%; padding:0; border-left-width:var(--bw);
+  transition:transform .14s ease, box-shadow .14s ease, border-color .14s ease;
+}
+.issue:hover { border-color:var(--line-strong); box-shadow:var(--sh-2); transform:translateY(-1px); }
+.issue__bar { background:var(--pr-nor-bar); }
+.issue[data-pr="urgent"] .issue__bar { background:var(--pr-urg-bar); }
+.issue[data-pr="important"] .issue__bar { background:var(--pr-imp-bar); }
+.issue__body { padding:13px 15px 14px; display:flex; flex-direction:column; gap:8px; min-width:0; }
+.issue__top { display:flex; flex-wrap:wrap; align-items:center; gap:7px; }
+.issue__top .ref { font-size:12.5px; color:var(--ink-2); margin-right:3px; }
+.issue__due { margin-left:auto; font-size:11.5px; color:var(--ink-3); display:flex; align-items:center; gap:5px; }
+.issue__due.is-late { color:var(--crit); font-weight:600; }
+.issue__desc {
+  font-size:14.5px; line-height:1.4; color:var(--ink);
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  max-width:92ch;
+}
+.issue__meta { display:flex; flex-wrap:wrap; align-items:center; gap:6px; font-size:12.5px; color:var(--ink-2); }
+.issue__meta s { text-decoration:none; color:var(--ink-3); }
+.issue__people { display:flex; flex-wrap:wrap; gap:6px 18px; padding-top:9px; border-top:var(--bw) solid var(--line); }
+.who { display:flex; align-items:baseline; gap:6px; font-size:12.5px; }
+.who em { font-style:normal; font-family:var(--label-font); font-size:var(--label-fs); font-weight:var(--label-w); letter-spacing:var(--label-ls); text-transform:var(--label-tr); color:var(--ink-3); }
+.who b { font-weight:600; }
+.who .none { color:var(--ink-3); font-style:italic; }
+
+/* ---------- Tuiles ---------- */
+.tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(168px,1fr)); gap:var(--gap); }
+.tiles--6 { grid-template-columns:repeat(6,minmax(0,1fr)); }
+.tile {
+  display:flex; flex-direction:column; gap:5px; padding:var(--pad-card);
+  background:var(--surface); border:var(--bw) solid var(--line);
+  border-radius:var(--r-card); box-shadow:var(--sh-1);
+  text-align:left; transition:border-color .14s, transform .14s, box-shadow .14s;
+}
+a.tile:hover, button.tile:hover { border-color:var(--line-strong); transform:translateY(-2px); box-shadow:var(--sh-2); }
+.tile__n { font-family:var(--font-display); font-weight:var(--display-w); font-size:34px; line-height:1; letter-spacing:var(--display-ls); font-variant-numeric:tabular-nums; }
+.tile__t { font-size:13.5px; font-weight:600; }
+.tile__c { font-size:12px; color:var(--ink-3); }
+.tile--alert .tile__n { color:var(--crit); }
+.tile--warn .tile__n { color:var(--warn); }
+.tile--ok .tile__n { color:var(--ok); }
+.tile__top { display:flex; align-items:center; justify-content:space-between; gap:8px; }
+.tile__top svg { width:16px; height:16px; stroke:var(--ink-3); fill:none; stroke-width:1.7; stroke-linecap:round; stroke-linejoin:round; }
+
+/* ---------- Cartes de section ---------- */
+.sec { background:var(--surface); border:var(--bw) solid var(--line); border-radius:var(--r-card); box-shadow:var(--sh-1); }
+.sec + .sec { margin-top:var(--gap); }
+.sec__head { display:flex; align-items:center; gap:10px; padding:12px var(--pad-card); border-bottom:var(--bw) solid var(--line); }
+.sec__head h3 { font-size:15px; }
+.sec__head .n { font-family:var(--font-mono); font-size:11px; color:var(--ink-3); }
+.sec__head .btn { margin-left:auto; }
+.sec__body { padding:var(--pad-card); }
+.sec__body > * + * { margin-top:var(--gap); }
+
+.dl { display:grid; grid-template-columns:repeat(auto-fit,minmax(158px,1fr)); gap:var(--gap) 22px; }
+.dl > div { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.dl dt { font-family:var(--label-font); font-size:var(--label-fs); font-weight:var(--label-w); letter-spacing:var(--label-ls); text-transform:var(--label-tr); color:var(--ink-3); }
+.dl dd { margin:0; font-size:14px; }
+/* Un badge long ne doit pas déborder de sa colonne sur petit écran. */
+.dl dd .badge { white-space:normal; }
+.prose { font-size:14.5px; line-height:1.6; color:var(--ink); max-width:68ch; }
+.muted { color:var(--ink-2); }
+.tiny { font-size:12px; color:var(--ink-3); }
+</style>
+<style>
+/* ---------- Formulaires ---------- */
+.fields { display:flex; flex-direction:column; gap:var(--gap); }
+.fields-2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:var(--gap); }
+.field { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.field > label { font-size:13px; font-weight:600; display:flex; align-items:baseline; gap:6px; }
+.field .req { color:var(--crit); font-weight:700; }
+.field .opt { font-weight:400; font-size:11.5px; color:var(--ink-3); margin-left:auto; }
+.input, .select, .textarea {
+  width:100%; min-height:var(--touch); padding:10px 12px;
+  background:var(--surface); color:var(--ink);
+  border:var(--bw) solid var(--line-strong); border-radius:var(--r-ctl);
+  font-size:14px;
+}
+.input::placeholder, .textarea::placeholder { color:var(--ink-3); }
+.input:hover, .select:hover, .textarea:hover { border-color:var(--ink-3); }
+.textarea { min-height:104px; resize:vertical; line-height:1.55; }
+.select { appearance:none; padding-right:34px; background-image:none; }
+.select-wrap { position:relative; }
+.select-wrap::after {
+  content:""; position:absolute; right:14px; top:50%; width:7px; height:7px;
+  border-right:2px solid var(--ink-3); border-bottom:2px solid var(--ink-3);
+  transform:translateY(-70%) rotate(45deg); pointer-events:none;
+}
+.hint { font-size:12px; color:var(--ink-3); }
+.err { font-size:12.5px; color:var(--crit); font-weight:600; display:flex; align-items:center; gap:6px; }
+.field.is-error .input, .field.is-error .textarea { border-color:var(--crit); }
+.counter { margin-left:auto; font-family:var(--font-mono); font-size:11px; color:var(--ink-3); }
+
+.chips { display:flex; flex-wrap:wrap; gap:8px; }
+.chip {
+  display:inline-flex; align-items:center; gap:7px;
+  min-height:calc(var(--touch) - 6px); padding:0 13px;
+  background:var(--surface); color:var(--ink-2);
+  border:var(--bw) solid var(--line-strong); border-radius:var(--r-pill);
+  font-size:13.5px; font-weight:500;
+}
+.chip::before { content:""; width:13px; height:13px; flex:none; border:var(--bw) solid var(--line-strong); border-radius:2px; }
+.chip:hover { color:var(--ink); border-color:var(--ink-3); }
+.chip[aria-pressed="true"], .chip.is-on { background:var(--accent-soft); border-color:var(--accent); color:var(--ink); font-weight:600; }
+.chip[aria-pressed="true"]::before, .chip.is-on::before { content:"✓"; border:0; font-size:11px; color:var(--accent); display:grid; place-items:center; }
+:root[data-mq="hv"] .chip[aria-pressed="true"]::before, :root[data-mq="hv"] .chip.is-on::before { color:var(--ink); }
+.chip[disabled] { opacity:.42; }
+
+.prio { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.prio button {
+  min-height:var(--touch); padding:8px 6px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:2px;
+  background:var(--surface); color:var(--ink-2);
+  border:var(--bw) solid var(--line-strong); border-radius:var(--r-ctl);
+  font-size:13.5px; font-weight:600;
+}
+.prio button small { font-size:10.5px; font-weight:400; color:var(--ink-3); }
+.prio button[aria-pressed="true"][data-p="normal"]    { background:var(--pr-nor-bg); border-color:var(--ink-3); color:var(--pr-nor-fg); }
+.prio button[aria-pressed="true"][data-p="important"] { background:var(--pr-imp-bg); border-color:var(--pr-imp-bar); color:var(--pr-imp-fg); }
+.prio button[aria-pressed="true"][data-p="urgent"]    { background:var(--pr-urg-bg); border-color:var(--pr-urg-bar); color:var(--pr-urg-fg); }
+.prio button[aria-pressed="true"] small { color:inherit; opacity:.8; }
+
+.dropzone {
+  display:flex; align-items:center; gap:12px; padding:15px;
+  border:calc(var(--bw) + 1px) dashed var(--line-strong); border-radius:var(--r-card);
+  background:var(--surface-2); color:var(--ink-2); font-size:13.5px; width:100%;
+}
+.dropzone svg { width:22px; height:22px; stroke:var(--ink-3); fill:none; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; flex:none; }
+
+.formbar {
+  display:flex; flex-wrap:wrap; gap:10px; align-items:center;
+  padding:14px var(--pad-card); background:var(--surface-2);
+  border:var(--bw) solid var(--line); border-top:0;
+  border-radius:0 0 var(--r-card) var(--r-card);
+}
+.formbar .btn--primary { margin-left:auto; }
+
+/* ---------- Barre de recherche et filtres ---------- */
+.toolbar { display:flex; flex-wrap:wrap; gap:9px; align-items:center; margin-bottom:var(--gap); }
+.toolbar .topbar-search { max-width:none; flex:1 1 260px; }
+.filterchips { display:flex; flex-wrap:wrap; gap:7px; align-items:center; margin-bottom:var(--gap); }
+.fchip {
+  display:inline-flex; align-items:center; gap:7px; padding:5px 8px 5px 11px;
+  background:var(--accent-soft); border:var(--bw) solid var(--accent);
+  border-radius:var(--r-pill); font-size:12.5px; font-weight:600; color:var(--ink);
+}
+.fchip b { font-weight:500; color:var(--ink-2); }
+.fchip x { font-style:normal; display:grid; place-items:center; width:16px; height:16px; border-radius:var(--r-pill); background:var(--surface); color:var(--ink-2); font-size:11px; cursor:pointer; }
+.count-line { font-size:12.5px; color:var(--ink-3); margin-bottom:var(--gap); display:flex; align-items:center; gap:8px; }
+
+/* ---------- Tableaux ---------- */
+.tbl-wrap { overflow-x:auto; border:var(--bw) solid var(--line); border-radius:var(--r-card); background:var(--surface); }
+.tbl { min-width:560px; }
+.tbl th {
+  text-align:left; padding:10px 13px; background:var(--surface-2);
+  font-family:var(--label-font); font-size:var(--label-fs); font-weight:var(--label-w);
+  letter-spacing:var(--label-ls); text-transform:var(--label-tr); color:var(--ink-3);
+  border-bottom:var(--bw) solid var(--line-strong); white-space:nowrap;
+}
+.tbl td { padding:11px 13px; border-bottom:var(--bw) solid var(--line); font-size:13.5px; vertical-align:middle; }
+.tbl tr:last-child td { border-bottom:0; }
+.tbl tbody tr:hover { background:var(--surface-2); }
+.tbl td.num, .tbl th.num { text-align:right; font-variant-numeric:tabular-nums; font-family:var(--font-mono); }
+
+/* ---------- Graphiques ---------- */
+.bars { display:flex; flex-direction:column; gap:9px; }
+.bar-row { display:grid; grid-template-columns:minmax(120px,180px) 1fr 34px; align-items:center; gap:12px; }
+.bar-row > span:first-child { font-size:13px; color:var(--ink-2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.bar-track { height:12px; background:var(--grid); border-radius:2px; position:relative; }
+.bar-fill { display:block; height:100%; background:var(--data); border-radius:0 4px 4px 0; transition:width .5s cubic-bezier(.2,.7,.3,1); }
+:root[data-mq="hv"] .bar-fill { border-radius:0; }
+:root[data-mq="hv"] .bar-track { border:2px solid var(--ink); height:16px; }
+.bar-row > .v { font-family:var(--font-mono); font-size:12.5px; font-variant-numeric:tabular-nums; text-align:right; color:var(--ink); font-weight:600; }
+.bar-row:hover .bar-fill { filter:brightness(1.08); }
+
+.stack { display:flex; height:26px; gap:2px; }
+.stack span { display:block; border-radius:3px; }
+:root[data-mq="hv"] .stack span { border-radius:0; border:2px solid var(--ink); }
+.legend { display:flex; flex-wrap:wrap; gap:8px 20px; margin-top:12px; }
+.legend div { display:flex; align-items:center; gap:7px; font-size:12.5px; color:var(--ink-2); }
+.legend i { width:11px; height:11px; border-radius:2px; flex:none; }
+.legend b { font-family:var(--font-mono); font-variant-numeric:tabular-nums; color:var(--ink); }
+.hero-n { font-family:var(--font-display); font-weight:var(--display-w); font-size:clamp(44px,7vw,62px); line-height:.95; letter-spacing:-.03em; font-variant-numeric:tabular-nums; }
+
+.tip {
+  position:fixed; z-index:90; pointer-events:none; opacity:0;
+  padding:6px 10px; border-radius:var(--r-ctl);
+  background:var(--ink); color:var(--surface);
+  font-size:12px; font-weight:600; white-space:nowrap;
+  box-shadow:var(--sh-2); transition:opacity .12s;
+}
+.tip.on { opacity:1; }
+
+/* ---------- Fil de commentaires ---------- */
+.comments { display:flex; flex-direction:column; }
+
+/* ---------- Chronologie ---------- */
+.tl { position:relative; padding-left:26px; }
+.tl::before { content:""; position:absolute; left:6px; top:7px; bottom:9px; width:2px; background:var(--line); }
+.tl li { position:relative; padding-bottom:15px; }
+.tl li:last-child { padding-bottom:0; }
+.tl li::before {
+  content:""; position:absolute; left:-26px; top:4px; width:14px; height:14px;
+  border-radius:var(--r-pill); background:var(--surface); border:2px solid var(--line-strong);
+}
+.tl li[data-k="ok"]::before   { background:var(--ok); border-color:var(--ok); }
+.tl li[data-k="warn"]::before { background:var(--warn); border-color:var(--warn); }
+.tl li[data-k="new"]::before  { background:var(--accent); border-color:var(--accent); }
+.tl b { font-size:13.5px; font-weight:600; }
+.tl p { font-size:13px; color:var(--ink-2); }
+.tl time { display:block; font-family:var(--font-mono); font-size:11px; color:var(--ink-3); margin-top:2px; }
+
+/* ---------- Blocs d'état ---------- */
+.notice {
+  display:flex; gap:12px; padding:14px 16px;
+  border:var(--bw) solid var(--line); border-left-width:3px; border-radius:var(--r-card);
+  background:var(--surface-2); font-size:13.5px;
+}
+:root[data-mq="hv"] .notice { border-left-width:6px; }
+.notice svg { width:18px; height:18px; flex:none; margin-top:1px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.notice b { display:block; font-size:13.5px; margin-bottom:2px; }
+.notice p { color:var(--ink-2); }
+.notice-actions { display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+.notice--crit { background:var(--crit-bg); border-color:var(--crit); color:var(--crit); }
+.notice--crit p, .notice--crit b { color:var(--crit); }
+.notice--warn { background:var(--warn-bg); border-color:var(--warn); color:var(--warn); }
+.notice--warn p, .notice--warn b { color:var(--warn); }
+.notice--ok   { background:var(--ok-bg); border-color:var(--ok); color:var(--ok); }
+.notice--ok p, .notice--ok b { color:var(--ok); }
+.notice--accent { background:var(--accent-soft); border-color:var(--accent); }
+
+.state { text-align:center; padding:38px 20px; border:var(--bw) dashed var(--line-strong); border-radius:var(--r-card); background:var(--surface); }
+.state svg { width:30px; height:30px; margin:0 auto 12px; stroke:var(--ink-3); fill:none; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+.state b { display:block; font-family:var(--font-display); font-weight:var(--display-w); font-size:16px; margin-bottom:5px; }
+.state p { color:var(--ink-2); font-size:13.5px; max-width:44ch; margin:0 auto 15px; }
+
+.skel { background:var(--surface-3); border-radius:3px; height:12px; animation:sk 1.4s ease-in-out infinite; }
+@keyframes sk { 0%,100% { opacity:.55; } 50% { opacity:1; } }
+
+.dialog {
+  background:var(--surface); border:var(--bw) solid var(--line-strong);
+  border-radius:var(--r-card); box-shadow:var(--sh-pop);
+  padding:var(--pad-card); max-width:430px;
+}
+.dialog h4 { font-family:var(--font-display); font-weight:var(--display-w); font-size:16px; margin-bottom:7px; }
+.dialog p { font-size:13.5px; color:var(--ink-2); }
+.dialog-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+.toast {
+  display:inline-flex; align-items:center; gap:10px; padding:11px 15px;
+  background:var(--ink); color:var(--bg); border-radius:var(--r-ctl);
+  font-size:13.5px; font-weight:600; box-shadow:var(--sh-pop);
+}
+:root[data-mq="hv"] .toast { border:2px solid var(--ink); background:var(--accent); color:var(--ink); }
+.toast svg { width:17px; height:17px; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+
+/* ---------- Onglets internes ---------- */
+.tabs { display:flex; gap:2px; overflow-x:auto; border-bottom:calc(var(--bw) + 1px) solid var(--line); margin-bottom:var(--gap-lg); scrollbar-width:none; }
+.tabs::-webkit-scrollbar { display:none; }
+.tabs button {
+  border:0; background:transparent; color:var(--ink-3);
+  padding:9px 13px; font-size:13.5px; font-weight:600; white-space:nowrap;
+  border-bottom:3px solid transparent; margin-bottom:-2px;
+}
+.tabs button:hover { color:var(--ink); }
+.tabs button[aria-selected="true"] { color:var(--ink); border-bottom-color:var(--accent); }
+:root[data-mq="atelier"] .tabs button[aria-selected="true"] { border-bottom-color:var(--signal); }
+.panel { display:none; }
+.panel.is-active { display:block; }
+
+/* ---------- Grilles de page ---------- */
+.split { display:grid; grid-template-columns:minmax(0,1fr) 296px; gap:var(--gap-lg); align-items:start; }
+.aside-card { position:sticky; top:14px; }
+.stack-v { display:flex; flex-direction:column; gap:var(--gap); }
+.row-between { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+.back {
+  display:inline-flex; align-items:center; gap:7px; margin-bottom:12px;
+  background:transparent; border:0; color:var(--ink-2); font-size:13px; font-weight:600; padding:4px 0;
+}
+.back:hover { color:var(--ink); }
+</style>
+<style>
+/* ============================================================
+   PARTICULARITÉS DE CHAQUE THÈME
+   Un thème ne change pas que des couleurs : il change la forme
+   des boutons, le traitement des statuts, la densité, le décor.
+   ============================================================ */
+
+/* — ATELIER : libellés d'action estampés, filets marqués — */
+:root[data-mq="atelier"] .btn { text-transform:uppercase; letter-spacing:.07em; font-size:12.5px; font-weight:600; }
+:root[data-mq="atelier"] .sec__head { background:var(--surface-2); }
+:root[data-mq="atelier"] .navitem[aria-current="page"] { box-shadow:inset 3px 0 0 var(--signal); }
+:root[data-mq="atelier"] .tile:has(.tile__n) { border-top:3px solid var(--ink); }
+:root[data-mq="atelier"] .tile--alert:has(.tile__n) { border-top-color:var(--signal); }
+:root[data-mq="atelier"] .ref { background:var(--surface-3); padding:1px 5px; border-radius:2px; }
+:root[data-mq="atelier"] .issue { grid-template-columns:5px 1fr; }
+
+/* — ARDOISE : titres en romain, rien d'estampé — */
+:root[data-mq="ardoise"] .btn { text-transform:none; letter-spacing:0; font-size:14px; }
+:root[data-mq="ardoise"] .tile__n { font-size:46px; letter-spacing:-.025em; }
+:root[data-mq="ardoise"] .sec__head h3 { font-size:17px; }
+:root[data-mq="ardoise"] .page-head h1 { font-size:clamp(24px,3.1vw,34px); }
+:root[data-mq="ardoise"] .navitem[aria-current="page"] { box-shadow:none; }
+:root[data-mq="ardoise"] .issue { grid-template-columns:3px 1fr; }
+:root[data-mq="ardoise"] .badge { padding:4px 11px; }
+
+/* — POSTE DE NUIT : statuts entre crochets, trame de points — */
+:root[data-mq="nuit"] .btn { text-transform:uppercase; letter-spacing:.1em; font-size:12px; font-family:var(--font-mono); font-weight:500; }
+:root[data-mq="nuit"] .badge {
+  font-family:var(--font-mono); font-weight:500; font-size:10.5px;
+  letter-spacing:.06em; text-transform:uppercase; background:transparent;
+  border-color:currentColor; padding:2px 7px;
+}
+:root[data-mq="nuit"] .badge::before { content:"["; opacity:.55; }
+:root[data-mq="nuit"] .badge::after  { content:"]"; opacity:.55; }
+:root[data-mq="nuit"] .badge i { display:none; }
+:root[data-mq="nuit"] .canvas { background-image:radial-gradient(rgba(95,179,217,.06) 1px, transparent 1px); background-size:20px 20px; }
+:root[data-mq="nuit"] .ref { color:var(--accent); }
+:root[data-mq="nuit"] .sec__head h3 { text-transform:uppercase; letter-spacing:.1em; font-size:12px; font-family:var(--font-mono); font-weight:500; color:var(--ink-2); }
+:root[data-mq="nuit"] .tile__n { font-size:36px; font-family:var(--font-mono); font-weight:700; }
+:root[data-mq="nuit"] .navitem[aria-current="page"] { box-shadow:inset 2px 0 0 var(--accent); }
+
+/* — HAUTE VISIBILITÉ : tout au filet 2 px, cibles 56 px — */
+:root[data-mq="hv"] .btn { text-transform:uppercase; letter-spacing:.04em; font-weight:800; font-size:14px; border-color:var(--ink); }
+:root[data-mq="hv"] .btn--primary { box-shadow:4px 4px 0 var(--ink); }
+:root[data-mq="hv"] .btn--ghost { border-color:transparent; }
+:root[data-mq="hv"] .issue { grid-template-columns:10px 1fr; }
+:root[data-mq="hv"] .issue[data-pr="normal"] { grid-template-columns:4px 1fr; }
+:root[data-mq="hv"] .issue__desc { font-size:16px; font-weight:600; }
+:root[data-mq="hv"] .navitem[aria-current="page"] { background:var(--accent); border:2px solid var(--ink); font-weight:800; }
+:root[data-mq="hv"] .tile { border-width:2px; }
+:root[data-mq="hv"] .tile__n { font-size:40px; }
+:root[data-mq="hv"] .tabs button[aria-selected="true"] { background:var(--accent); border-bottom-color:var(--ink); }
+:root[data-mq="hv"] .fchip { background:var(--accent); }
+:root[data-mq="hv"] .avatar { border-width:2px; }
+
+/* ============================================================
+   RESPONSIVE — piloté par la largeur de la scène (container),
+   donc identique en aperçu « Mobile » et sur un vrai téléphone.
+   ============================================================ */
+@container (max-width: 780px) {
+  .rail { display:none; }
+  .topbar-search { display:none; }
+  .tabbar { display:flex; }
+  .topbar-brand { display:flex; }
+  .topbar-search { max-width:none; }
+  .app { grid-template-columns:1fr; }
+  .split { grid-template-columns:1fr; }
+  .aside-card { position:static; }
+  .page-head-actions { margin-left:0; width:100%; }
+  .page-head-actions .btn { flex:1; }
+  .canvas { padding:14px 13px 20px; }
+  .tiles, .tiles--6 { grid-template-columns:repeat(2,1fr); }
+  .tile__n { font-size:28px; }
+  :root[data-mq="ardoise"] .tile__n { font-size:34px; }
+  .prio { grid-template-columns:1fr; }
+  .dl { grid-template-columns:repeat(auto-fit,minmax(132px,1fr)); }
+  .bar-row { grid-template-columns:1fr 34px; grid-template-areas:"l l" "t v"; }
+  .bar-row > span:first-child { grid-area:l; }
+  .bar-row > .bar-track { grid-area:t; }
+  .bar-row > .v { grid-area:v; }
+  .fields-2 { grid-template-columns:1fr; }
+}
+@container (max-width: 420px) {
+  .issue__due { margin-left:0; width:100%; }
+  .page-head h1 { font-size:22px; }
+}
+@container (max-width: 350px) {
+  .tiles, .tiles--6 { grid-template-columns:1fr; }
+}
+
+/* ============================================================
+   INSPECTEUR DE JETONS + BIBLIOTHÈQUE DE COMPOSANTS
+   ============================================================ */
+.tok-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(228px,1fr)); gap:var(--gap); }
+.tok-card { background:var(--surface); border:var(--bw) solid var(--line); border-radius:var(--r-card); padding:var(--pad-card); }
+.tok-card > h3 { font-size:13px; margin-bottom:12px; }
+.tok-row { display:flex; align-items:center; gap:10px; padding:5px 0; font-size:12px; }
+.tok-row + .tok-row { border-top:var(--bw) solid var(--line); }
+.tok-sw { width:26px; height:26px; flex:none; border-radius:var(--r-ctl); border:var(--bw) solid var(--line-strong); }
+.tok-name { font-family:var(--font-mono); font-size:11.5px; color:var(--ink-2); }
+.tok-val { margin-left:auto; font-family:var(--font-mono); font-size:11px; color:var(--ink-3); text-transform:uppercase; }
+.spec-line { display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; padding:7px 0; border-top:var(--bw) solid var(--line); }
+.spec-line b { white-space:nowrap; }
+.spec-line:first-of-type { border-top:0; }
+.spec-line .k { font-family:var(--font-mono); font-size:11px; color:var(--ink-3); min-width:82px; }
+
+.lib { display:grid; grid-template-columns:repeat(auto-fit,minmax(268px,1fr)); gap:var(--gap); align-items:start; }
+.lib-cell { background:var(--surface); border:var(--bw) solid var(--line); border-radius:var(--r-card); padding:var(--pad-card); }
+.lib-cell > h3 { font-size:12.5px; margin-bottom:13px; padding-bottom:9px; border-bottom:var(--bw) solid var(--line); }
+.lib-row { display:flex; flex-wrap:wrap; gap:9px; align-items:center; }
+.lib-row + .lib-row { margin-top:11px; }
+.lib-cell--wide { grid-column:1 / -1; }
+</style>
+<style>
+  a.issue, a.tile, a.lib-cell { color:inherit; text-decoration:none; }
+</style>
+
+<svg class="sr" aria-hidden="true" focusable="false"><defs>
+  <g id="i-home"><path d="M3 10.6 12 3.4l9 7.2"/><path d="M5.6 9.4V20.6h12.8V9.4"/><path d="M9.8 20.6v-6h4.4v6"/></g>
+  <g id="i-list"><path d="M4 5.5h16M4 12h16M4 18.5h11"/></g>
+  <g id="i-plus"><path d="M12 5v14M5 12h14"/></g>
+  <g id="i-chart"><path d="M4 20h16"/><path d="M7 20v-7M12 20V6M17 20v-10"/></g>
+  <g id="i-cog"><circle cx="12" cy="12" r="3.1"/><path d="M12 3.2v2.1M12 18.7v2.1M20.8 12h-2.1M5.3 12H3.2M18.2 5.8l-1.5 1.5M7.3 16.7l-1.5 1.5M18.2 18.2l-1.5-1.5M7.3 7.3 5.8 5.8"/></g>
+  <g id="i-search"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m15.4 15.4 4.1 4.1"/></g>
+  <g id="i-bell"><path d="M18 16.5H6l1.3-2.2V10a4.7 4.7 0 0 1 9.4 0v4.3z"/><path d="M10.3 19.4a1.9 1.9 0 0 0 3.4 0"/></g>
+  <g id="i-filter"><path d="M4 6h16l-6.2 7v5.4l-3.6 1.6V13z"/></g>
+  <g id="i-clock"><circle cx="12" cy="12" r="8.4"/><path d="M12 7.2V12l3.2 2"/></g>
+  <g id="i-check"><path d="m5 12.6 4.6 4.4L19 7.4"/></g>
+  <g id="i-alert"><path d="M12 4.4 21 19.6H3z"/><path d="M12 10v4.2M12 17h.01"/></g>
+  <g id="i-clip"><path d="M18.6 11.4 12 18a4.1 4.1 0 0 1-5.8-5.8l7.2-7.2a2.7 2.7 0 0 1 3.9 3.9l-7.2 7.2a1.3 1.3 0 0 1-1.9-1.9l6.5-6.5"/></g>
+  <g id="i-back"><path d="M14.6 5.4 8 12l6.6 6.6"/></g>
+  <g id="i-user"><circle cx="12" cy="8.4" r="3.6"/><path d="M4.8 20a7.2 7.2 0 0 1 14.4 0"/></g>
+  <g id="i-inbox"><path d="M3.6 13.4 6.4 5h11.2l2.8 8.4v5.2H3.6z"/><path d="M3.6 13.4h4.6a3.8 3.8 0 0 0 7.6 0h4.6"/></g>
+  <g id="i-offline"><path d="M3 4.6 21 19.4"/><path d="M5.2 9.4a11 11 0 0 1 4-2.3M18.8 9.4a11 11 0 0 0-3.3-2.1M7.9 13a7 7 0 0 1 2-1.2M16.1 13a7 7 0 0 0-1.6-1"/><path d="M12 18.4h.01"/></g>
+  <g id="i-image"><rect x="3.6" y="5" width="16.8" height="14" rx="1.6"/><circle cx="8.6" cy="10" r="1.5"/><path d="m4.4 17 4.8-4.6 3.4 3.2 2.6-2.2 4.4 3.9"/></g>
+  <g id="i-pdf"><path d="M6 3.4h7.4L18.6 8.6V20.6H6z"/><path d="M13.2 3.4v5.4h5.4"/><path d="M9 15.6h6M9 12.6h3"/></g>
+  <g id="i-refresh"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4.2v4.6h-4.6"/></g>
+  <g id="i-pause"><path d="M9.6 6.6v10.8M14.4 6.6v10.8"/></g>
+  <g id="i-flag"><path d="M6 20.6V4.4h11l-2 3.6 2 3.6H6"/></g>
+  <g id="i-sort"><path d="M7 4.6v14.8M7 19.4 4.2 16.4M7 19.4l2.8-3M16.4 19.4V4.6M16.4 4.6 13.6 7.6M16.4 4.6l2.8 3"/></g>
+  <g id="i-link"><path d="M10.4 13.6a3.4 3.4 0 0 0 5 .4l2.6-2.6a3.4 3.4 0 0 0-4.8-4.8l-1.5 1.5"/><path d="M13.6 10.4a3.4 3.4 0 0 0-5-.4L6 12.6a3.4 3.4 0 0 0 4.8 4.8l1.5-1.5"/></g>
+</defs></svg>
+
+<div class="studio">
+
+  <header class="studio-bar">
+    <div class="studio-id">
+      <span class="studio-mark" aria-hidden="true">R</span>
+      <span class="studio-name">Maquette du Registre
+        <span class="studio-sub">Registre des erreurs — proposition visuelle</span>
+      </span>
+    </div>
+
+    <div class="ctl-group">
+      <span class="label" id="lbl-theme">Thème</span>
+      <div class="swatches" id="themes" role="group" aria-labelledby="lbl-theme">
+        <button class="swatch" type="button" data-theme="atelier" aria-pressed="true">
+          <span class="chip-dots" aria-hidden="true"><i style="background:#E8EAE6"></i><i style="background:#1B2A2E"></i><i style="background:#C63A11"></i></span>Atelier</button>
+        <button class="swatch" type="button" data-theme="ardoise" aria-pressed="false">
+          <span class="chip-dots" aria-hidden="true"><i style="background:#F1F4F6"></i><i style="background:#0F1A21"></i><i style="background:#0E6E77"></i></span>Ardoise</button>
+        <button class="swatch" type="button" data-theme="nuit" aria-pressed="false">
+          <span class="chip-dots" aria-hidden="true"><i style="background:#0B1013"></i><i style="background:#E4EDF1"></i><i style="background:#5FB3D9"></i></span>Poste de nuit</button>
+        <button class="swatch" type="button" data-theme="hv" aria-pressed="false">
+          <span class="chip-dots" aria-hidden="true"><i style="background:#FFFFFF"></i><i style="background:#000000"></i><i style="background:#FFD100"></i></span>Haute visibilité</button>
+      </div>
+    </div>
+
+    <div class="ctl-group">
+      <span class="label" id="lbl-vp">Format</span>
+      <div class="seg" id="vp" role="group" aria-labelledby="lbl-vp">
+        <button type="button" data-vp="desktop" aria-pressed="true">Bureau</button>
+        <button type="button" data-vp="mobile" aria-pressed="false">Mobile</button>
+      </div>
+    </div>
+  </header>
+
+  <div class="theme-note">
+    <h2 id="tn-name">Atelier</h2>
+    <p id="tn-desc">Béton clair, filets fins, encre noire. L'orange n'apparaît que là où une action est attendue : c'est le seul signal de la page. Dense, lisible d'un coup d'œil entre deux tâches.</p>
+    <span class="usage" id="tn-use">Comptoir · entrepôt · poste fixe</span>
+  </div>
+
+  <div class="stage-wrap">
+  <div class="stage" id="stage" data-vp="desktop">
+    <div class="app" id="app">
+
+      <!-- ============ RAIL DE NAVIGATION ============ -->
+      <aside class="rail">
+        <div class="rail-brand">
+          <span class="studio-mark" aria-hidden="true">R</span>
+          <b>Registre<span>des erreurs</span></b>
+        </div>
+        <nav class="rail-nav" aria-label="Navigation principale">
+          <span class="label">Travail</span>
+          <button class="navitem" type="button" data-go="accueil" aria-current="page"><svg viewBox="0 0 24 24"><use href="#i-home"/></svg>Accueil</button>
+          <button class="navitem" type="button" data-go="registre"><svg viewBox="0 0 24 24"><use href="#i-list"/></svg>Registre<span class="count num">38</span></button>
+          <button class="navitem" type="button" data-go="nouveau"><svg viewBox="0 0 24 24"><use href="#i-plus"/></svg>Nouveau dossier</button>
+          <span class="label" style="margin-top:10px">Pilotage</span>
+          <button class="navitem" type="button" data-go="analyse"><svg viewBox="0 0 24 24"><use href="#i-chart"/></svg>Analyse</button>
+          <button class="navitem" type="button" data-go="admin"><svg viewBox="0 0 24 24"><use href="#i-cog"/></svg>Administration</button>
+        </nav>
+        <div class="rail-user">
+          <span class="avatar" aria-hidden="true">MB</span>
+          <span><b>Marie Boisvert</b><span>Gestionnaire · Saint-Jérôme</span></span>
+        </div>
+      </aside>
+
+      <div class="app-main">
+        <!-- ============ BARRE SUPÉRIEURE ============ -->
+        <div class="topbar">
+          <div class="topbar-brand">
+            <span class="studio-mark" style="width:26px;height:26px;font-size:13px" aria-hidden="true">R</span>
+            <b style="font-family:var(--font-display);font-size:14px">Registre</b>
+          </div>
+          <div class="topbar-search">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"/></svg>
+            <label class="sr" for="q-global">Rechercher un dossier</label>
+            <input class="input" id="q-global" type="search" placeholder="No dossier ou mots-clés">
+          </div>
+          <div class="topbar-actions">
+            <button class="iconbtn" type="button" aria-label="Notifications"><svg viewBox="0 0 24 24"><use href="#i-bell"/></svg></button>
+            <span class="avatar" aria-hidden="true">MB</span>
+          </div>
+        </div>
+
+        <main class="canvas">
+
+        <!-- ==================================================
+             ÉCRAN 1 — ACCUEIL
+             ================================================== -->
+        <section class="screen is-active" data-screen="accueil" aria-label="Accueil">
+          <div class="page-head">
+            <div>
+              <span class="label eyebrow">Mardi 25 août 2026 · Saint-Jérôme</span>
+              <h1>Bonjour Marie</h1>
+              <p>Quatre dossiers attendent une décision de votre part aujourd'hui.</p>
+            </div>
+            <div class="page-head-actions">
+              <button class="btn btn--primary" type="button" data-go="nouveau"><svg viewBox="0 0 24 24"><use href="#i-plus"/></svg>Signaler un problème</button>
+            </div>
+          </div>
+
+          <div class="tiles" style="margin-bottom:var(--gap-lg)">
+            <a class="tile" href="#registre" data-go="registre">
+              <div class="tile__top"><span class="label">Mes dossiers</span><svg viewBox="0 0 24 24"><use href="#i-user"/></svg></div>
+              <span class="tile__n num">12</span>
+              <span class="tile__t">Dont vous êtes responsable</span>
+              <span class="tile__c">3 échéances cette semaine</span>
+            </a>
+            <a class="tile tile--alert" href="#registre" data-go="registre">
+              <div class="tile__top"><span class="label">Urgents</span><svg viewBox="0 0 24 24"><use href="#i-alert"/></svg></div>
+              <span class="tile__n num">6</span>
+              <span class="tile__t">Priorité urgente, non réglés</span>
+              <span class="tile__c">2 dépassent leur échéance</span>
+            </a>
+            <a class="tile tile--warn" href="#registre" data-go="registre">
+              <div class="tile__top"><span class="label">En attente</span><svg viewBox="0 0 24 24"><use href="#i-pause"/></svg></div>
+              <span class="tile__n num">9</span>
+              <span class="tile__t">Bloqués par une attente</span>
+              <span class="tile__c">Fournisseur, client ou autre service</span>
+            </a>
+            <a class="tile" href="#analyse" data-go="analyse">
+              <div class="tile__top"><span class="label">Révisions dues</span><svg viewBox="0 0 24 24"><use href="#i-clock"/></svg></div>
+              <span class="tile__n num">3</span>
+              <span class="tile__t">Corrections à réévaluer</span>
+              <span class="tile__c">Échéance de revue atteinte</span>
+            </a>
+          </div>
+
+          <div class="split">
+            <div>
+              <div class="row-between" style="margin-bottom:var(--gap)">
+                <h2 style="font-size:16px">À traiter en priorité</h2>
+                <button class="btn btn--ghost btn--sm" type="button" data-go="registre">Tout le registre</button>
+              </div>
+              <div class="list">
+
+                <a class="issue" href="#detail" data-pr="urgent" data-go="detail">
+                  <span class="issue__bar" aria-hidden="true"></span>
+                  <span class="issue__body">
+                    <span class="issue__top">
+                      <span class="ref">INC-000042</span>
+                      <span class="badge badge--urgent"><i aria-hidden="true">▲</i>Urgente</span>
+                      <span class="badge badge--prog"><i aria-hidden="true">◐</i>En cours</span>
+                      <span class="issue__due is-late"><svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2"><use href="#i-clock"/></svg>Échéance aujourd'hui</span>
+                    </span>
+                    <span class="issue__desc">Réception de 12 unités au lieu de 20 sur le bon de commande PO-8841. L'écart n'a été vu qu'au moment de préparer la livraison du client.</span>
+                    <span class="issue__meta">Saint-Jérôme <s>·</s> Achats et stock <s>·</s> Erreur de réception</span>
+                    <span class="issue__people">
+                      <span class="who"><em>Responsable</em><b>Marie Boisvert</b></span>
+                      <span class="who"><em>Employé concerné</em><b>Steve Ouellet</b></span>
+                    </span>
+                  </span>
+                </a>
+
+                <a class="issue" href="#detail" data-pr="urgent" data-go="detail">
+                  <span class="issue__bar" aria-hidden="true"></span>
+                  <span class="issue__body">
+                    <span class="issue__top">
+                      <span class="ref">INC-000033</span>
+                      <span class="badge badge--urgent"><i aria-hidden="true">▲</i>Urgente</span>
+                      <span class="badge badge--prog"><i aria-hidden="true">◐</i>En cours</span>
+                      <span class="issue__due is-late"><svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2"><use href="#i-alert"/></svg>En retard de 3 jours</span>
+                    </span>
+                    <span class="issue__desc">Mauvais produit livré chez le client : modèle 240 L expédié au lieu du 180 L commandé. Reprise à planifier avec la route.</span>
+                    <span class="issue__meta">Laval <s>·</s> Ventes <s>·</s> Mauvais produit</span>
+                    <span class="issue__people">
+                      <span class="who"><em>Responsable</em><b>Karim Haddad</b></span>
+                      <span class="who"><em>Employé concerné</em><span class="none">Attribution inconnue</span></span>
+                    </span>
+                  </span>
+                </a>
+
+                <a class="issue" href="#detail" data-pr="important" data-go="detail">
+                  <span class="issue__bar" aria-hidden="true"></span>
+                  <span class="issue__body">
+                    <span class="issue__top">
+                      <span class="ref">INC-000041</span>
+                      <span class="badge badge--important"><i aria-hidden="true">◆</i>Importante</span>
+                      <span class="badge badge--new"><i aria-hidden="true">◇</i>Nouveau</span>
+                      <span class="issue__due">Créé il y a 2 h</span>
+                    </span>
+                    <span class="issue__desc">Erreur de prix sur la soumission SO-3312 : rabais de volume appliqué deux fois. Le client a déjà signé.</span>
+                    <span class="issue__meta">Laval <s>·</s> Ventes <s>·</s> Sous-catégorie à confirmer</span>
+                    <span class="issue__people">
+                      <span class="who"><em>Responsable</em><span class="none">Non assigné</span></span>
+                      <span class="who"><em>Employé concerné</em><span class="none">Attribution inconnue</span></span>
+                    </span>
+                  </span>
+                </a>
+
+              </div>
+            </div>
+
+            <div class="stack-v">
+              <div class="sec aside-card">
+                <div class="sec__head"><h3>Activité récente</h3></div>
+                <div class="sec__body">
+                  <ul class="tl">
+                    <li data-k="warn"><b>INC-000039 mis en attente</b><p>Karim Haddad — attente du fournisseur Delta</p><time>Aujourd'hui, 14:12</time></li>
+                    <li data-k="new"><b>INC-000041 créé</b><p>Julie Tremblay — Ventes, Laval</p><time>Aujourd'hui, 11:47</time></li>
+                    <li data-k="ok"><b>INC-000037 réglé</b><p>Nadia Fortin — révision d'efficacité au 2 sept.</p><time>Hier, 16:30</time></li>
+                    <li><b>Commentaire sur INC-000042</b><p>Steve Ouellet — « Le fournisseur confirme l'écart »</p><time>Hier, 09:05</time></li>
+                  </ul>
+                </div>
+              </div>
+
+              <div class="sec">
+                <div class="sec__head"><h3>Vos 30 derniers jours</h3></div>
+                <div class="sec__body">
+                  <div class="spec-line"><span class="k">Réglés</span><b class="num">14</b><span class="tiny">sur 19 pris en charge</span></div>
+                  <div class="spec-line"><span class="k">Délai moyen</span><b class="num">3,4 j</b><span class="tiny">de la prise en charge au règlement</span></div>
+                  <div class="spec-line"><span class="k">Efficacité</span><b class="num">82 %</b><span class="tiny">sur corrections évaluées</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <!-- ==================================================
+             ÉCRAN 2 — REGISTRE
+             ================================================== -->
+        <section class="screen" data-screen="registre" aria-label="Registre">
+          <div class="page-head">
+            <div>
+              <span class="label eyebrow">38 dossiers ouverts · 6 urgents</span>
+              <h1>Registre</h1>
+            </div>
+            <div class="page-head-actions">
+              <label class="sr" for="tri">Trier</label>
+              <div class="select-wrap">
+                <select class="select" id="tri" style="min-width:158px">
+                  <option>Plus récents</option><option>Plus anciens</option><option>Priorité</option><option>Échéance</option>
+                </select>
+              </div>
+              <button class="btn btn--primary" type="button" data-go="nouveau"><svg viewBox="0 0 24 24"><use href="#i-plus"/></svg>Nouveau dossier</button>
+            </div>
+          </div>
+
+          <div class="toolbar">
+            <div class="topbar-search">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-search"/></svg>
+              <label class="sr" for="q-list">Rechercher dans le registre</label>
+              <input class="input" id="q-list" type="search" placeholder="No dossier ou mots-clés">
+            </div>
+            <button class="btn btn--secondary" type="button"><svg viewBox="0 0 24 24"><use href="#i-filter"/></svg>Filtres <span class="badge badge--role num" style="margin-left:2px">3</span></button>
+            <button class="btn btn--ghost btn--sm" type="button"><svg viewBox="0 0 24 24"><use href="#i-sort"/></svg>Trier</button>
+          </div>
+
+          <div class="filterchips">
+            <span class="fchip"><b>Priorité</b> Urgente <x role="button" tabindex="0" aria-label="Retirer le filtre Priorité urgente">✕</x></span>
+            <span class="fchip"><b>Succursale</b> Saint-Jérôme <x role="button" tabindex="0" aria-label="Retirer le filtre Succursale">✕</x></span>
+            <span class="fchip"><b>Statut</b> En cours <x role="button" tabindex="0" aria-label="Retirer le filtre Statut">✕</x></span>
+            <button class="btn btn--ghost btn--sm" type="button">Réinitialiser</button>
+          </div>
+
+          <p class="count-line"><b class="num">6</b> dossiers correspondent · triés par plus récents</p>
+
+          <div class="list">
+
+            <a class="issue" href="#detail" data-pr="urgent" data-go="detail">
+              <span class="issue__bar" aria-hidden="true"></span>
+              <span class="issue__body">
+                <span class="issue__top">
+                  <span class="ref">INC-000042</span>
+                  <span class="badge badge--urgent"><i aria-hidden="true">▲</i>Urgente</span>
+                  <span class="badge badge--prog"><i aria-hidden="true">◐</i>En cours</span>
+                  <span class="issue__due is-late"><svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2"><use href="#i-clock"/></svg>Échéance aujourd'hui</span>
+                </span>
+                <span class="issue__desc">Réception de 12 unités au lieu de 20 sur le bon de commande PO-8841. L'écart n'a été vu qu'au moment de préparer la livraison du client.</span>
+                <span class="issue__meta">Saint-Jérôme <s>·</s> Achats et stock <s>·</s> Erreur de réception</span>
+                <span class="issue__people">
+                  <span class="who"><em>Responsable</em><b>Marie Boisvert</b></span>
+                  <span class="who"><em>Employé concerné</em><b>Steve Ouellet</b></span>
+                </span>
+              </span>
+            </a>
+
+            <a class="issue" href="#detail" data-pr="important" data-go="detail">
+              <span class="issue__bar" aria-hidden="true"></span>
+              <span class="issue__body">
+                <span class="issue__top">
+                  <span class="ref">INC-000041</span>
+                  <span class="badge badge--important"><i aria-hidden="true">◆</i>Importante</span>
+                  <span class="badge badge--new"><i aria-hidden="true">◇</i>Nouveau</span>
+                  <span class="issue__due">Créé il y a 2 h</span>
+                </span>
+                <span class="issue__desc">Erreur de prix sur la soumission SO-3312 : rabais de volume appliqué deux fois. Le client a déjà signé.</span>
+                <span class="issue__meta">Laval <s>·</s> Ventes <s>·</s> Sous-catégorie à confirmer</span>
+                <span class="issue__people">
+                  <span class="who"><em>Responsable</em><span class="none">Non assigné</span></span>
+                  <span class="who"><em>Employé concerné</em><span class="none">Attribution inconnue</span></span>
+                </span>
+              </span>
+            </a>
+
+            <a class="issue" href="#detail" data-pr="normal" data-go="detail">
+              <span class="issue__bar" aria-hidden="true"></span>
+              <span class="issue__body">
+                <span class="issue__top">
+                  <span class="ref">INC-000039</span>
+                  <span class="badge badge--normal"><i aria-hidden="true">●</i>Normale</span>
+                  <span class="badge badge--wait"><i aria-hidden="true">⏸</i>En attente</span>
+                  <span class="issue__due">Échéance 3 sept.</span>
+                </span>
+                <span class="issue__desc">Pièce de rechange en rupture chez le fournisseur : la réparation du client Gagnon est suspendue depuis lundi.</span>
+                <span class="issue__meta">Québec <s>·</s> Réparations <s>·</s> Pièces</span>
+                <span class="issue__people">
+                  <span class="who"><em>Responsable</em><b>Karim Haddad</b></span>
+                  <span class="who"><em>En attente de</em><b>Fournisseur Delta</b></span>
+                </span>
+              </span>
+            </a>
+
+            <a class="issue" href="#detail" data-pr="important" data-go="detail">
+              <span class="issue__bar" aria-hidden="true"></span>
+              <span class="issue__body">
+                <span class="issue__top">
+                  <span class="ref">INC-000035</span>
+                  <span class="badge badge--important"><i aria-hidden="true">◆</i>Importante</span>
+                  <span class="badge badge--prog"><i aria-hidden="true">◐</i>En cours</span>
+                  <span class="issue__due">Échéance 29 août</span>
+                </span>
+                <span class="issue__desc">Facturation Servex en double sur le dossier d'atelier 44921 : le client a reçu deux factures pour la même intervention.</span>
+                <span class="issue__meta">Organisation / corporatif <s>·</s> Servex <s>·</s> Facturation</span>
+                <span class="issue__people">
+                  <span class="who"><em>Responsable</em><b>Nadia Fortin</b></span>
+                  <span class="who"><em>Employé concerné</em><b>Julie Tremblay</b></span>
+                </span>
+              </span>
+            </a>
+
+            <a class="issue" href="#detail" data-pr="normal" data-go="detail">
+              <span class="issue__bar" aria-hidden="true"></span>
+              <span class="issue__body">
+                <span class="issue__top">
+                  <span class="ref">INC-000037</span>
+                  <span class="badge badge--normal"><i aria-hidden="true">●</i>Normale</span>
+                  <span class="badge badge--done"><i aria-hidden="true">✓</i>Résolu</span>
+                  <span class="issue__due"><svg viewBox="0 0 24 24" style="width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2"><use href="#i-clock"/></svg>Révision le 2 sept.</span>
+                </span>
+                <span class="issue__desc">Écart d'inventaire de 8 unités sur le modèle SX-14 : double saisie lors du transfert entre succursales.</span>
+                <span class="issue__meta">Sherbrooke <s>·</s> Achats et stock <s>·</s> Écart inventaire</span>
+                <span class="issue__people">
+                  <span class="who"><em>Responsable</em><b>Nadia Fortin</b></span>
+                  <span class="who"><em>Employé concerné</em><b>Marc-André Roy</b></span>
+                </span>
+              </span>
+            </a>
+
+            <a class="issue" href="#detail" data-pr="normal" data-go="detail">
+              <span class="issue__bar" aria-hidden="true"></span>
+              <span class="issue__body">
+                <span class="issue__top">
+                  <span class="ref">INC-000031</span>
+                  <span class="badge badge--normal"><i aria-hidden="true">●</i>Normale</span>
+                  <span class="badge badge--done"><i aria-hidden="true">✓</i>Résolu</span>
+                  <span class="issue__due">Réglé le 19 août</span>
+                </span>
+                <span class="issue__desc">Suivi manquant après l'appel du client Béland : la demande de soumission est restée sans réponse pendant six jours.</span>
+                <span class="issue__meta">Saint-Jérôme <s>·</s> Expérience client <s>·</s> Suivi manquant</span>
+                <span class="issue__people">
+                  <span class="who"><em>Responsable</em><b>Marie Boisvert</b></span>
+                  <span class="who"><em>Employé concerné</em><b>Sophie Lemay</b></span>
+                </span>
+              </span>
+            </a>
+
+          </div>
+
+          <p class="count-line" style="margin:var(--gap) 0 0; justify-content:center">Fin de la liste — 6 dossiers affichés sur 38</p>
+        </section>
+
+        <!-- ==================================================
+             ÉCRAN 3 — DÉTAIL DU DOSSIER
+             ================================================== -->
+        <section class="screen" data-screen="detail" aria-label="Détail du dossier">
+          <button class="back" type="button" data-go="registre"><svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2"><use href="#i-back"/></svg>Registre</button>
+
+          <div class="page-head" style="margin-bottom:var(--gap)">
+            <div>
+              <span class="label eyebrow ref" style="font-size:12px">INC-000042</span>
+              <h1 style="font-size:clamp(19px,2.4vw,25px);max-width:30ch">Réception de 12 unités au lieu de 20 sur le bon de commande PO-8841</h1>
+              <div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:10px">
+                <span class="badge badge--urgent"><i aria-hidden="true">▲</i>Urgente</span>
+                <span class="badge badge--prog"><i aria-hidden="true">◐</i>En cours</span>
+                <span class="badge badge--late"><i aria-hidden="true">◷</i>Échéance aujourd'hui</span>
+              </div>
+              <p style="margin-top:9px">Saint-Jérôme · Achats et stock · Erreur de réception · Signalé le 22 août par Steve Ouellet</p>
+            </div>
+          </div>
+
+          <div class="split">
+            <div>
+              <div class="sec">
+                <div class="sec__head"><span class="label n">1</span><h3>Situation</h3><button class="btn btn--ghost btn--sm" type="button">Modifier</button></div>
+                <div class="sec__body">
+                  <dl class="dl">
+                    <div><dt>Date de l'incident</dt><dd>22 août 2026</dd></div>
+                    <div><dt>Succursale</dt><dd>Saint-Jérôme</dd></div>
+                    <div><dt>Département</dt><dd>Entrepôt / Stock</dd></div>
+                    <div><dt>Catégorie</dt><dd>Achats et stock</dd></div>
+                    <div><dt>Sous-catégorie</dt><dd>Erreur de réception</dd></div>
+                  </dl>
+                  <p class="prose">Le bon de commande PO-8841 prévoyait 20 unités du modèle SX-14. La réception a été saisie complète dans Servex, mais seulement 12 unités étaient sur la palette. L'écart n'a été vu que trois jours plus tard, au moment de préparer la livraison du client Gagnon.</p>
+                  <div>
+                    <span class="label" style="display:block;margin-bottom:8px">Impacts</span>
+                    <div class="chips">
+                      <span class="chip is-on">Retard client</span>
+                      <span class="chip is-on">Mauvais inventaire</span>
+                      <span class="chip is-on">Travail à refaire</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="sec">
+                <div class="sec__head"><span class="label n">2</span><h3>Prise en charge</h3><button class="btn btn--ghost btn--sm" type="button">Modifier</button></div>
+                <div class="sec__body">
+                  <dl class="dl">
+                    <div><dt>Priorité</dt><dd><span class="badge badge--urgent"><i aria-hidden="true">▲</i>Urgente</span></dd></div>
+                    <div><dt>Statut</dt><dd><span class="badge badge--prog"><i aria-hidden="true">◐</i>En cours</span></dd></div>
+                    <div><dt>Responsable du traitement</dt><dd>Marie Boisvert</dd></div>
+                    <div><dt>Employé concerné par l'erreur</dt><dd>Steve Ouellet</dd></div>
+                    <div><dt>Échéance</dt><dd style="color:var(--crit);font-weight:600">Aujourd'hui, 25 août</dd></div>
+                  </dl>
+                  <div class="notice">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-user"/></svg>
+                    <div><b>Deux rôles distincts</b><p>Le responsable corrige le dossier. L'employé concerné est la personne à qui l'erreur observée est attribuée : seuls un gestionnaire ou un administrateur peuvent modifier cette attribution.</p></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="sec">
+                <div class="sec__head"><span class="label n">3</span><h3>Analyse</h3><button class="btn btn--ghost btn--sm" type="button">Modifier</button></div>
+                <div class="sec__body">
+                  <dl class="dl"><div><dt>Cause</dt><dd><span class="badge badge--done"><i aria-hidden="true">✓</i>Identifiée</span></dd></div></dl>
+                  <p class="prose">La réception est saisie à partir du bon de commande et non du décompte physique. Quand la palette est incomplète, rien dans Servex ne force la vérification.</p>
+                </div>
+              </div>
+
+              <div class="sec">
+                <div class="sec__head"><span class="label n">4</span><h3>Solution immédiate</h3><button class="btn btn--ghost btn--sm" type="button">Modifier</button></div>
+                <div class="sec__body"><p class="prose">Huit unités transférées de Laval le 23 août. Le client Gagnon a été livré le 24 août avec un jour de retard, avisé par téléphone.</p></div>
+              </div>
+
+              <div class="sec">
+                <div class="sec__head"><span class="label n">5</span><h3>Correction permanente</h3><button class="btn btn--ghost btn--sm" type="button">Modifier</button></div>
+                <div class="sec__body">
+                  <dl class="dl"><div><dt>Type</dt><dd>Changement de procédure</dd></div><div><dt>Mise en place</dt><dd>2 septembre 2026</dd></div></dl>
+                  <p class="prose">Décompte physique obligatoire avant la saisie de réception, avec double signature pour toute palette de plus de 10 unités.</p>
+                </div>
+              </div>
+
+              <div class="sec">
+                <div class="sec__head"><span class="label n">6</span><h3>Actions correctives</h3><button class="btn btn--ghost btn--sm" type="button">Ajouter</button></div>
+                <div class="sec__body">
+                  <div class="notice notice--warn">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert"/></svg>
+                    <div><b>Une action bloque la clôture</b><p>Ce dossier ne peut pas être réglé tant que l'action obligatoire reste ouverte.</p></div>
+                  </div>
+                  <article class="issue" data-pr="important" style="cursor:default">
+                    <span class="issue__bar" aria-hidden="true"></span>
+                    <div class="issue__body">
+                      <div class="issue__top">
+                        <span class="badge badge--prog"><i aria-hidden="true">◐</i>En cours</span>
+                        <span class="badge badge--important"><i aria-hidden="true">◆</i>Bloque la clôture</span>
+                        <span class="issue__due">Échéance 2 sept.</span>
+                      </div>
+                      <p class="issue__desc">Modifier la procédure de réception et la faire signer par les quatre commis d'entrepôt.</p>
+                      <div class="issue__people"><span class="who"><em>Responsable</em><b>Marie Boisvert</b></span></div>
+                    </div>
+                  </article>
+                  <article class="issue" data-pr="normal" style="cursor:default">
+                    <span class="issue__bar" aria-hidden="true"></span>
+                    <div class="issue__body">
+                      <div class="issue__top">
+                        <span class="badge badge--done"><i aria-hidden="true">✓</i>Terminée</span>
+                        <span class="issue__due">Terminée le 23 août</span>
+                      </div>
+                      <p class="issue__desc">Corriger l'inventaire Servex de la succursale Saint-Jérôme (écart de 8 unités).</p>
+                      <div class="issue__people"><span class="who"><em>Responsable</em><b>Steve Ouellet</b></span></div>
+                    </div>
+                  </article>
+                </div>
+              </div>
+
+              <div class="sec">
+                <div class="sec__head"><span class="label n">7</span><h3>Résultat et prévention</h3></div>
+                <div class="sec__body">
+                  <dl class="dl">
+                    <div><dt>Efficacité</dt><dd><span class="badge badge--wait"><i aria-hidden="true">⏸</i>En attente de révision</span></dd></div>
+                    <div><dt>Date de révision</dt><dd>2 octobre 2026</dd></div>
+                  </dl>
+                  <p class="prose muted">Le résultat final et l'apprentissage se remplissent au règlement du dossier.</p>
+                </div>
+              </div>
+
+              <div class="sec">
+                <div class="sec__head"><span class="label n">8</span><h3>Commentaires</h3><span class="label n">2</span></div>
+                <div class="sec__body">
+                  <div class="comments">
+                    <div style="display:flex;gap:11px">
+                      <span class="avatar" aria-hidden="true">SO</span>
+                      <div><b style="font-size:13.5px">Steve Ouellet</b> <span class="tiny">hier, 09:05</span>
+                        <p class="prose" style="font-size:14px">Le fournisseur confirme l'écart : leur bordereau indique 12 unités expédiées. Un crédit sera émis.</p></div>
+                    </div>
+                    <div style="display:flex;gap:11px;margin-top:14px;padding-top:14px;border-top:var(--bw) solid var(--line)">
+                      <span class="avatar" aria-hidden="true">MB</span>
+                      <div><b style="font-size:13.5px">Marie Boisvert</b> <span class="tiny">hier, 10:22</span>
+                        <p class="prose" style="font-size:14px">Transfert de Laval organisé pour demain matin. J'avise le client aujourd'hui.</p></div>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <label class="sr" for="c-new">Ajouter un commentaire</label>
+                    <textarea class="textarea" id="c-new" rows="2" placeholder="Ajouter un commentaire…"></textarea>
+                    <div class="lib-row" style="justify-content:flex-end"><button class="btn btn--primary btn--sm" type="button">Publier</button></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="sec">
+                <div class="sec__head"><span class="label n">9</span><h3>Pièces jointes</h3><span class="label n">3</span></div>
+                <div class="sec__body">
+                  <div class="notice notice--warn">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clip"/></svg>
+                    <div><b>2 fichiers n'ont pas encore été envoyés</b><p>Ils sont conservés sur cet appareil. Aucun nouveau dossier n'a été créé.</p>
+                      <div class="notice-actions"><button class="btn btn--secondary btn--sm" type="button"><svg viewBox="0 0 24 24"><use href="#i-refresh"/></svg>Réessayer</button><button class="btn btn--ghost btn--sm" type="button">Retirer</button></div></div>
+                  </div>
+                  <div class="tiles" style="grid-template-columns:repeat(auto-fill,minmax(140px,1fr))">
+                    <div class="tile" style="gap:8px"><svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:var(--ink-3);fill:none;stroke-width:1.6"><use href="#i-image"/></svg><span class="tile__t">palette-recue.jpg</span><span class="tile__c">1,8 Mo · 22 août</span></div>
+                    <div class="tile" style="gap:8px"><svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:var(--ink-3);fill:none;stroke-width:1.6"><use href="#i-pdf"/></svg><span class="tile__t">PO-8841.pdf</span><span class="tile__c">240 ko · 22 août</span></div>
+                    <div class="tile" style="gap:8px"><svg viewBox="0 0 24 24" style="width:22px;height:22px;stroke:var(--ink-3);fill:none;stroke-width:1.6"><use href="#i-image"/></svg><span class="tile__t">bordereau.jpg</span><span class="tile__c">920 ko · 23 août</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="sec">
+                <div class="sec__head"><span class="label n">10</span><h3>Cas similaires</h3></div>
+                <div class="sec__body">
+                  <div class="stack-v" style="gap:9px">
+                    <div class="row-between" style="padding-bottom:9px;border-bottom:var(--bw) solid var(--line)">
+                      <span><span class="ref" style="font-size:12px">INC-000018</span> <span style="font-size:13.5px">Réception incomplète — palette non décomptée</span></span>
+                      <span class="tiny">Saint-Jérôme · juin 2026</span>
+                    </div>
+                    <div class="row-between">
+                      <span><span class="ref" style="font-size:12px">INC-000009</span> <span style="font-size:13.5px">Écart de réception sur PO-7712</span></span>
+                      <span class="tiny">Laval · mars 2026</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="sec">
+                <div class="sec__head"><span class="label n">11</span><h3>Historique</h3></div>
+                <div class="sec__body">
+                  <ul class="tl">
+                    <li data-k="warn"><b>Échéance fixée à aujourd'hui</b><p>Marie Boisvert</p><time>24 août, 08:10</time></li>
+                    <li><b>Pièce jointe ajoutée — bordereau.jpg</b><p>Steve Ouellet</p><time>23 août, 15:42</time></li>
+                    <li data-k="ok"><b>Action corrective terminée</b><p>Correction de l'inventaire Servex — Steve Ouellet</p><time>23 août, 11:20</time></li>
+                    <li><b>Employé concerné attribué à Steve Ouellet</b><p>Marie Boisvert</p><time>22 août, 16:55</time></li>
+                    <li data-k="new"><b>Pris en charge — statut « En cours »</b><p>Marie Boisvert · sous-catégorie confirmée</p><time>22 août, 16:50</time></li>
+                    <li><b>Dossier créé</b><p>Steve Ouellet · priorité urgente</p><time>22 août, 16:31</time></li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <!-- Colonne latérale : fiche d'action -->
+            <div class="stack-v">
+              <div class="sec aside-card">
+                <div class="sec__head"><h3>Traitement</h3></div>
+                <div class="sec__body" style="display:flex;flex-direction:column;gap:12px">
+                  <button class="btn btn--primary" type="button" style="width:100%"><svg viewBox="0 0 24 24"><use href="#i-check"/></svg>Régler le dossier</button>
+                  <button class="btn btn--secondary" type="button" style="width:100%"><svg viewBox="0 0 24 24"><use href="#i-pause"/></svg>Mettre en attente</button>
+                  <p class="tiny">« Régler le dossier » n'ouvre que les champs encore manquants. Réservé aux gestionnaires et administrateurs.</p>
+                  <div style="border-top:var(--bw) solid var(--line);padding-top:12px">
+                    <div class="spec-line"><span class="k">Ouvert depuis</span><b>3 jours</b></div>
+                    <div class="spec-line"><span class="k">Commentaires</span><b class="num">2</b></div>
+                    <div class="spec-line"><span class="k">Fichiers</span><b class="num">3</b> <span class="tiny">+2 en attente</span></div>
+                  </div>
+                </div>
+              </div>
+              <div class="sec">
+                <div class="sec__head"><h3>Liens</h3></div>
+                <div class="sec__body">
+                  <div class="lib-row"><svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:var(--ink-3);fill:none;stroke-width:1.8"><use href="#i-link"/></svg><span style="font-size:13px">Bon de commande PO-8841</span></div>
+                  <div class="lib-row"><svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:var(--ink-3);fill:none;stroke-width:1.8"><use href="#i-link"/></svg><span style="font-size:13px">Dossier d'atelier 44921</span></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+        <!-- ==================================================
+             ÉCRAN 4 — NOUVEAU DOSSIER
+             ================================================== -->
+        <section class="screen" data-screen="nouveau" aria-label="Nouveau dossier">
+          <button class="back" type="button" data-go="registre"><svg viewBox="0 0 24 24" style="width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2"><use href="#i-back"/></svg>Retour</button>
+          <div class="page-head">
+            <div>
+              <span class="label eyebrow">Moins d'une minute</span>
+              <h1>Signaler un problème</h1>
+              <p>Décrivez les faits. L'analyse et la correction se remplissent plus tard, à la prise en charge.</p>
+            </div>
+          </div>
+
+          <div class="notice notice--accent" style="margin-bottom:var(--gap-lg)">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clock"/></svg>
+            <div><b>Vous avez un brouillon commencé à 14:32</b><p>Il est conservé sur cet appareil, même hors ligne.</p>
+              <div class="notice-actions"><button class="btn btn--secondary btn--sm" type="button">Reprendre</button><button class="btn btn--ghost btn--sm" type="button">Supprimer</button></div></div>
+          </div>
+
+          <div style="max-width:660px">
+            <div class="sec">
+              <div class="sec__head"><h3>Quand et où</h3></div>
+              <div class="sec__body">
+                <div class="fields-2">
+                  <div class="field"><label for="f-date">Quand est-ce arrivé ? <span class="req" aria-hidden="true">*</span></label>
+                    <input class="input" id="f-date" type="text" value="25 août 2026"><span class="hint">Par défaut : aujourd'hui</span></div>
+                  <div class="field"><label for="f-loc">Succursale <span class="req" aria-hidden="true">*</span></label>
+                    <div class="select-wrap"><select class="select" id="f-loc"><option>Saint-Jérôme</option><option>Laval</option><option>Québec</option><option>Sherbrooke</option><option>Organisation / corporatif</option></select></div>
+                    <span class="hint">Pré-remplie avec votre succursale</span></div>
+                  <div class="field"><label for="f-dep">Département <span class="opt">Facultatif</span></label>
+                    <div class="select-wrap"><select class="select" id="f-dep"><option>Entrepôt / Stock</option><option>Ventes</option><option>Service / Réparations</option><option>Administration</option><option>Direction</option><option>Route / Installation</option><option>Autre</option></select></div></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="sec">
+              <div class="sec__head"><h3>Quel type de problème</h3></div>
+              <div class="sec__body">
+                <div class="fields-2">
+                  <div class="field"><label for="f-cat">Catégorie <span class="req" aria-hidden="true">*</span></label>
+                    <div class="select-wrap"><select class="select" id="f-cat"><option>Achats et stock</option><option>Ventes</option><option>Employés — opération / formation</option><option>Réparations</option><option>Servex</option><option>Garanties et retours</option><option>Administration</option><option>Communications entre succursales</option><option>Expérience client</option></select></div></div>
+                  <div class="field"><label for="f-sub">Sous-catégorie <span class="opt">Facultatif</span></label>
+                    <div class="select-wrap"><select class="select" id="f-sub"><option>Choisir…</option><option>Erreur de commande</option><option>Erreur de réception</option><option>Écart inventaire</option><option>Délai fournisseur</option></select></div>
+                    <span class="hint">Facultatif maintenant — sera confirmé à la prise en charge.</span></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="sec">
+              <div class="sec__head"><h3>Que s'est-il passé</h3></div>
+              <div class="sec__body">
+                <div class="field is-error">
+                  <label for="f-desc">Décrivez les faits <span class="req" aria-hidden="true">*</span><span class="counter num">18 / 2000</span></label>
+                  <textarea class="textarea" id="f-desc">Palette incomplète</textarea>
+                  <span class="err"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.2"><use href="#i-alert"/></svg>Ajoutez ce qui a été constaté, où et quand — 20 caractères minimum.</span>
+                </div>
+
+                <div class="field">
+                  <label id="lbl-imp">Conséquences <span class="req" aria-hidden="true">*</span></label>
+                  <div class="chips" role="group" aria-labelledby="lbl-imp">
+                    <button class="chip" type="button" aria-pressed="false">Aucun impact externe</button>
+                    <button class="chip" type="button" aria-pressed="false">Temps perdu</button>
+                    <button class="chip" type="button" aria-pressed="true">Retard client</button>
+                    <button class="chip" type="button" aria-pressed="false">Insatisfaction client</button>
+                    <button class="chip" type="button" aria-pressed="false">Perte financière</button>
+                    <button class="chip" type="button" aria-pressed="false">Mauvaise commande</button>
+                    <button class="chip" type="button" aria-pressed="true">Mauvais inventaire</button>
+                    <button class="chip" type="button" aria-pressed="false">Travail à refaire</button>
+                    <button class="chip" type="button" aria-pressed="false">Produit retourné</button>
+                    <button class="chip" type="button" aria-pressed="true">Autre</button>
+                  </div>
+                  <span class="hint">« Aucun impact externe » désactive les autres choix.</span>
+                </div>
+
+                <div class="field"><label for="f-other">Précisez « Autre » <span class="req" aria-hidden="true">*</span></label>
+                  <input class="input" id="f-other" type="text" placeholder="En quoi cela a-t-il nui ?"></div>
+
+                <div class="field">
+                  <label id="lbl-prio">Priorité <span class="req" aria-hidden="true">*</span></label>
+                  <div class="prio" role="group" aria-labelledby="lbl-prio">
+                    <button type="button" data-p="normal" aria-pressed="true">Normale<small>Traitement régulier</small></button>
+                    <button type="button" data-p="important" aria-pressed="false">Importante<small>À traiter cette semaine</small></button>
+                    <button type="button" data-p="urgent" aria-pressed="false">Urgente<small>Client ou production bloqué</small></button>
+                  </div>
+                </div>
+
+                <div class="field">
+                  <label>Photos et documents <span class="opt">Facultatif</span></label>
+                  <button class="dropzone" type="button">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-clip"/></svg>
+                    <span style="text-align:left"><b style="display:block;font-size:13.5px">Ajouter des fichiers</b><span class="tiny">JPEG, PNG, WebP, HEIC ou PDF — 10 Mo maximum par fichier</span></span>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="formbar">
+              <button class="btn btn--ghost" type="button">Annuler</button>
+              <span class="tiny">Brouillon enregistré sur l'appareil</span>
+              <button class="btn btn--primary" type="button"><svg viewBox="0 0 24 24"><use href="#i-check"/></svg>Enregistrer le dossier</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================================================
+             ÉCRAN 5 — ANALYSE
+             ================================================== -->
+        <section class="screen" data-screen="analyse" aria-label="Analyse">
+          <div class="page-head">
+            <div><span class="label eyebrow">1er au 25 août 2026 · toutes succursales</span><h1>Analyse</h1></div>
+            <div class="page-head-actions">
+              <div class="select-wrap"><label class="sr" for="per">Période</label><select class="select" id="per"><option>30 derniers jours</option><option>Trimestre en cours</option><option>Année en cours</option></select></div>
+            </div>
+          </div>
+
+          <div class="tabs" role="tablist" data-tabs="analyse">
+            <button type="button" role="tab" aria-selected="true" data-panel="synthese">Synthèse</button>
+            <button type="button" role="tab" aria-selected="false" data-panel="recur">Récurrences</button>
+            <button type="button" role="tab" aria-selected="false" data-panel="emp">Erreurs par employé</button>
+            <button type="button" role="tab" aria-selected="false" data-panel="eff">Efficacité</button>
+            <button type="button" role="tab" aria-selected="false" data-panel="rev">Révisions dues</button>
+          </div>
+
+          <div class="panel is-active" data-panel="synthese">
+            <div class="tiles tiles--6" style="margin-bottom:var(--gap-lg)">
+              <div class="tile"><span class="label">Ouverts</span><span class="tile__n num">38</span><span class="tile__c">Tous statuts sauf résolu</span></div>
+              <div class="tile tile--alert"><span class="label">Urgents</span><span class="tile__n num">6</span><span class="tile__c">Priorité urgente</span></div>
+              <div class="tile tile--alert"><span class="label">En retard</span><span class="tile__n num">4</span><span class="tile__c">Échéance dépassée</span></div>
+              <div class="tile tile--warn"><span class="label">En attente</span><span class="tile__n num">9</span><span class="tile__c">Bloqués par un tiers</span></div>
+              <div class="tile tile--ok"><span class="label">Résolus (30 j)</span><span class="tile__n num">27</span><span class="tile__c">Réglés sur la période</span></div>
+              <div class="tile"><span class="label">À réévaluer</span><span class="tile__n num">11</span><span class="tile__c">Efficacité en attente</span></div>
+            </div>
+
+            <div class="split">
+              <div class="sec" style="margin:0">
+                <div class="sec__head"><h3>Types d'erreurs les plus fréquents</h3><span class="label n">30 jours</span></div>
+                <div class="sec__body">
+                  <div class="bars">
+                    <div class="bar-row"><span>Erreur de réception</span><span class="bar-track"><span class="bar-fill" style="width:100%" data-tip="Erreur de réception — 17 dossiers"></span></span><span class="v num">17</span></div>
+                    <div class="bar-row"><span>Saisie de données</span><span class="bar-track"><span class="bar-fill" style="width:82.4%" data-tip="Saisie de données — 14 dossiers"></span></span><span class="v num">14</span></div>
+                    <div class="bar-row"><span>Erreur de prix</span><span class="bar-track"><span class="bar-fill" style="width:64.7%" data-tip="Erreur de prix — 11 dossiers"></span></span><span class="v num">11</span></div>
+                    <div class="bar-row"><span>Suivi manquant</span><span class="bar-track"><span class="bar-fill" style="width:52.9%" data-tip="Suivi manquant — 9 dossiers"></span></span><span class="v num">9</span></div>
+                    <div class="bar-row"><span>Procédure non suivie</span><span class="bar-track"><span class="bar-fill" style="width:41.2%" data-tip="Procédure non suivie — 7 dossiers"></span></span><span class="v num">7</span></div>
+                    <div class="bar-row"><span>Délai fournisseur</span><span class="bar-track"><span class="bar-fill" style="width:29.4%" data-tip="Délai fournisseur — 5 dossiers"></span></span><span class="v num">5</span></div>
+                  </div>
+                  <p class="tiny" style="margin-top:14px">Sous-catégories, toutes succursales confondues. Un dossier compte une seule fois.</p>
+                </div>
+              </div>
+              <div class="sec" style="margin:0">
+                <div class="sec__head"><h3>Délai de résolution</h3></div>
+                <div class="sec__body">
+                  <span class="hero-n">3,4</span>
+                  <p class="tiny" style="margin-top:4px">jours en moyenne, de la prise en charge au règlement</p>
+                  <div style="border-top:var(--bw) solid var(--line);margin-top:14px;padding-top:6px">
+                    <div class="spec-line"><span class="k">Urgents</span><b class="num">1,2 j</b></div>
+                    <div class="spec-line"><span class="k">Importants</span><b class="num">2,9 j</b></div>
+                    <div class="spec-line"><span class="k">Normaux</span><b class="num">5,1 j</b></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel" data-panel="recur">
+            <div class="notice" style="margin-bottom:var(--gap)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-alert"/></svg>
+              <div><b>Deux portées, jamais mélangées</b><p>Une répétition dans une succursale ne se lit pas comme une répétition dans l'organisation. Les deux compteurs restent séparés et étiquetés.</p></div>
+            </div>
+            <div class="sec">
+              <div class="sec__head"><h3>Dans une succursale</h3><span class="label n">Saint-Jérôme</span></div>
+              <div class="sec__body"><div class="bars">
+                <div class="bar-row"><span>Erreur de réception</span><span class="bar-track"><span class="bar-fill" style="width:100%" data-tip="Saint-Jérôme — 9 dossiers"></span></span><span class="v num">9</span></div>
+                <div class="bar-row"><span>Saisie de données</span><span class="bar-track"><span class="bar-fill" style="width:77.8%" data-tip="Saint-Jérôme — 7 dossiers"></span></span><span class="v num">7</span></div>
+                <div class="bar-row"><span>Suivi manquant</span><span class="bar-track"><span class="bar-fill" style="width:55.6%" data-tip="Saint-Jérôme — 5 dossiers"></span></span><span class="v num">5</span></div>
+                <div class="bar-row"><span>Contrôle qualité</span><span class="bar-track"><span class="bar-fill" style="width:33.3%" data-tip="Saint-Jérôme — 3 dossiers"></span></span><span class="v num">3</span></div>
+              </div></div>
+            </div>
+            <div class="sec">
+              <div class="sec__head"><h3>Dans l'organisation</h3><span class="label n">5 succursales</span></div>
+              <div class="sec__body"><div class="bars">
+                <div class="bar-row"><span>Saisie de données</span><span class="bar-track"><span class="bar-fill" style="width:100%" data-tip="Organisation — 21 dossiers"></span></span><span class="v num">21</span></div>
+                <div class="bar-row"><span>Erreur de réception</span><span class="bar-track"><span class="bar-fill" style="width:81%" data-tip="Organisation — 17 dossiers"></span></span><span class="v num">17</span></div>
+                <div class="bar-row"><span>Erreur de prix</span><span class="bar-track"><span class="bar-fill" style="width:66.7%" data-tip="Organisation — 14 dossiers"></span></span><span class="v num">14</span></div>
+                <div class="bar-row"><span>Suivi manquant</span><span class="bar-track"><span class="bar-fill" style="width:52.4%" data-tip="Organisation — 11 dossiers"></span></span><span class="v num">11</span></div>
+                <div class="bar-row"><span>Procédure non suivie</span><span class="bar-track"><span class="bar-fill" style="width:42.9%" data-tip="Organisation — 9 dossiers"></span></span><span class="v num">9</span></div>
+              </div></div>
+            </div>
+          </div>
+
+          <div class="panel" data-panel="emp">
+            <div class="notice" style="margin-bottom:var(--gap)">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-user"/></svg>
+              <div><b>Vue réservée aux gestionnaires et administrateurs</b><p>Groupée par employé concerné et par type précis d'erreur. Aucun courriel n'est affiché.</p></div>
+            </div>
+            <div class="tbl-wrap">
+              <table class="tbl">
+                <thead><tr><th>Employé concerné</th><th>Statut</th><th>Type d'erreur</th><th class="num">Dossiers</th><th>Plus récent</th></tr></thead>
+                <tbody>
+                  <tr><td>Steve Ouellet</td><td><span class="badge badge--done"><i aria-hidden="true">✓</i>Actif</span></td><td>Erreur de réception</td><td class="num">5</td><td><span class="ref" style="font-size:12px">INC-000042</span></td></tr>
+                  <tr><td>Julie Tremblay</td><td><span class="badge badge--done"><i aria-hidden="true">✓</i>Actif</span></td><td>Facturation</td><td class="num">4</td><td><span class="ref" style="font-size:12px">INC-000035</span></td></tr>
+                  <tr><td>Marc-André Roy</td><td><span class="badge badge--done"><i aria-hidden="true">✓</i>Actif</span></td><td>Écart inventaire</td><td class="num">3</td><td><span class="ref" style="font-size:12px">INC-000037</span></td></tr>
+                  <tr><td>Sophie Lemay</td><td><span class="badge badge--new"><i aria-hidden="true">◇</i>Inactif</span></td><td>Suivi manquant</td><td class="num">2</td><td><span class="ref" style="font-size:12px">INC-000031</span></td></tr>
+                  <tr><td><span class="who"><span class="none">Attribution inconnue</span></span></td><td>—</td><td>Toutes</td><td class="num">7</td><td><span class="ref" style="font-size:12px">INC-000041</span></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel" data-panel="eff">
+            <div class="split">
+              <div class="sec" style="margin:0">
+                <div class="sec__head"><h3>Efficacité des corrections permanentes</h3></div>
+                <div class="sec__body">
+                  <div class="stack" role="img" aria-label="18 corrections efficaces, 4 inefficaces, 11 en attente de révision">
+                    <span style="width:54.5%;background:var(--ok)" data-tip="Efficaces — 18"></span>
+                    <span style="width:12.1%;background:var(--crit)" data-tip="Inefficaces — 4"></span>
+                    <span style="width:33.4%;background:var(--grid);border:var(--bw) solid var(--line-strong)" data-tip="En attente de révision — 11"></span>
+                  </div>
+                  <div class="legend">
+                    <div><i style="background:var(--ok)"></i>✓ Efficaces <b class="num">18</b></div>
+                    <div><i style="background:var(--crit)"></i>✕ Inefficaces <b class="num">4</b></div>
+                    <div><i style="background:var(--grid);border:var(--bw) solid var(--line-strong)"></i>⏸ En attente <b class="num">11</b></div>
+                  </div>
+                </div>
+              </div>
+              <div class="sec" style="margin:0">
+                <div class="sec__head"><h3>Taux d'efficacité</h3></div>
+                <div class="sec__body">
+                  <span class="hero-n" style="color:var(--ok)">82 %</span>
+                  <p class="tiny" style="margin-top:6px">18 corrections efficaces sur 22 évaluées.</p>
+                  <p class="tiny" style="margin-top:10px;padding-top:10px;border-top:var(--bw) solid var(--line)">Les corrections en attente de validation ne sont pas incluses dans le taux.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="panel" data-panel="rev">
+            <p class="count-line">Filtre par défaut : révision due avant aujourd'hui (25 août 2026).</p>
+            <div class="tbl-wrap">
+              <table class="tbl">
+                <thead><tr><th>No dossier</th><th>Correction permanente</th><th>Date de revue</th><th>Responsable</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td><span class="ref" style="font-size:12px">INC-000019</span></td><td>Double signature à la réception</td><td><span class="badge badge--late"><i aria-hidden="true">◷</i>18 août</span></td><td>Marie Boisvert</td><td style="text-align:right"><button class="btn btn--secondary btn--sm" type="button">Évaluer</button></td></tr>
+                  <tr><td><span class="ref" style="font-size:12px">INC-000022</span></td><td>Gabarit de soumission verrouillé</td><td><span class="badge badge--late"><i aria-hidden="true">◷</i>21 août</span></td><td>Karim Haddad</td><td style="text-align:right"><button class="btn btn--secondary btn--sm" type="button">Évaluer</button></td></tr>
+                  <tr><td><span class="ref" style="font-size:12px">INC-000026</span></td><td>Rappel automatique de suivi à 48 h</td><td><span class="badge badge--wait"><i aria-hidden="true">⏸</i>Aujourd'hui</span></td><td>Nadia Fortin</td><td style="text-align:right"><button class="btn btn--secondary btn--sm" type="button">Évaluer</button></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ==================================================
+             ÉCRAN 6 — ADMINISTRATION
+             ================================================== -->
+        <section class="screen" data-screen="admin" aria-label="Administration">
+          <div class="page-head">
+            <div><span class="label eyebrow">Réservé aux administrateurs</span><h1>Administration</h1>
+              <p>Les référentiels alimentent tous les formulaires. Une valeur retirée reste lisible sur les dossiers existants.</p></div>
+            <div class="page-head-actions"><button class="btn btn--primary" type="button"><svg viewBox="0 0 24 24"><use href="#i-plus"/></svg>Ajouter</button></div>
+          </div>
+
+          <div class="tabs" role="tablist" data-tabs="admin">
+            <button type="button" role="tab" aria-selected="true" data-panel="users">Utilisateurs</button>
+            <button type="button" role="tab" aria-selected="false" data-panel="ref">Localisations</button>
+            <button type="button" role="tab" aria-selected="false" data-panel="ref2">Départements</button>
+            <button type="button" role="tab" aria-selected="false" data-panel="ref3">Catégories</button>
+            <button type="button" role="tab" aria-selected="false" data-panel="ref4">Sous-catégories</button>
+            <button type="button" role="tab" aria-selected="false" data-panel="ref5">Impacts</button>
+          </div>
+
+          <div class="panel is-active" data-panel="users">
+            <div class="tbl-wrap">
+              <table class="tbl">
+                <thead><tr><th>Nom affiché</th><th>Rôle</th><th>Succursale</th><th>Département</th><th>État</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td>Marie Boisvert</td><td><span class="badge badge--prog"><i aria-hidden="true">◆</i>Gestionnaire</span></td><td>Saint-Jérôme</td><td>Entrepôt / Stock</td><td><span class="badge badge--done"><i aria-hidden="true">✓</i>Actif</span></td><td style="text-align:right"><button class="btn btn--ghost btn--sm" type="button">Modifier</button></td></tr>
+                  <tr><td>Nadia Fortin</td><td><span class="badge badge--urgent"><i aria-hidden="true">▲</i>Administrateur</span></td><td>Organisation</td><td>Direction</td><td><span class="badge badge--done"><i aria-hidden="true">✓</i>Actif</span></td><td style="text-align:right"><button class="btn btn--ghost btn--sm" type="button">Modifier</button></td></tr>
+                  <tr><td>Steve Ouellet</td><td><span class="badge badge--new"><i aria-hidden="true">●</i>Employé</span></td><td>Saint-Jérôme</td><td>Entrepôt / Stock</td><td><span class="badge badge--done"><i aria-hidden="true">✓</i>Actif</span></td><td style="text-align:right"><button class="btn btn--ghost btn--sm" type="button">Modifier</button></td></tr>
+                  <tr><td>Sophie Lemay</td><td><span class="badge badge--new"><i aria-hidden="true">●</i>Employé</span></td><td>Laval</td><td>Ventes</td><td><span class="badge badge--wait"><i aria-hidden="true">⏸</i>Inactif</span></td><td style="text-align:right"><button class="btn btn--ghost btn--sm" type="button">Modifier</button></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel" data-panel="ref">
+            <div class="tbl-wrap">
+              <table class="tbl">
+                <thead><tr><th>Code</th><th>Libellé</th><th class="num">Ordre</th><th>État</th><th></th></tr></thead>
+                <tbody>
+                  <tr><td><span class="ref" style="font-size:12px">CORP</span></td><td>Organisation / corporatif</td><td class="num">1</td><td><span class="badge badge--done"><i aria-hidden="true">✓</i>Actif</span></td><td style="text-align:right"><button class="btn btn--ghost btn--sm" type="button">Modifier</button></td></tr>
+                  <tr><td><span class="ref" style="font-size:12px">STJ</span></td><td>Saint-Jérôme</td><td class="num">10</td><td><span class="badge badge--done"><i aria-hidden="true">✓</i>Actif</span></td><td style="text-align:right"><button class="btn btn--ghost btn--sm" type="button">Modifier</button></td></tr>
+                  <tr><td><span class="ref" style="font-size:12px">LAV</span></td><td>Laval</td><td class="num">20</td><td><span class="badge badge--done"><i aria-hidden="true">✓</i>Actif</span></td><td style="text-align:right"><button class="btn btn--ghost btn--sm" type="button">Modifier</button></td></tr>
+                  <tr><td><span class="ref" style="font-size:12px">QUE</span></td><td>Québec</td><td class="num">30</td><td><span class="badge badge--done"><i aria-hidden="true">✓</i>Actif</span></td><td style="text-align:right"><button class="btn btn--ghost btn--sm" type="button">Modifier</button></td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="panel" data-panel="ref2"><div class="state"><svg viewBox="0 0 24 24"><use href="#i-inbox"/></svg><b>Départements</b><p>Même tableau, même logique : code, libellé, ordre d'affichage, état actif.</p></div></div>
+          <div class="panel" data-panel="ref3"><div class="state"><svg viewBox="0 0 24 24"><use href="#i-inbox"/></svg><b>Catégories</b><p>Neuf catégories gelées au bootstrap. L'ordre d'affichage se règle ici.</p></div></div>
+          <div class="panel" data-panel="ref4"><div class="state"><svg viewBox="0 0 24 24"><use href="#i-inbox"/></svg><b>Sous-catégories</b><p>Rattachées à une catégorie parente. Obligatoires au triage.</p></div></div>
+          <div class="panel" data-panel="ref5"><div class="state"><svg viewBox="0 0 24 24"><use href="#i-inbox"/></svg><b>Impacts</b><p>« Aucun impact externe » reste exclusif des autres valeurs.</p></div></div>
+        </section>
+
+        </main>
+
+        <!-- ============ NAVIGATION MOBILE ============ -->
+        <nav class="tabbar" aria-label="Navigation principale">
+          <button type="button" data-go="accueil" aria-current="page"><svg viewBox="0 0 24 24"><use href="#i-home"/></svg>Accueil</button>
+          <button type="button" data-go="registre"><svg viewBox="0 0 24 24"><use href="#i-list"/></svg>Registre</button>
+          <button type="button" class="fab" data-go="nouveau"><i aria-hidden="true">+</i><span class="sr">Nouveau dossier</span></button>
+          <button type="button" data-go="analyse"><svg viewBox="0 0 24 24"><use href="#i-chart"/></svg>Analyse</button>
+          <button type="button" data-go="admin"><svg viewBox="0 0 24 24"><use href="#i-cog"/></svg>Admin</button>
+        </nav>
+      </div>
+    </div>
+  </div>
+  </div>
+  <div class="doc-rule"></div>
+
+  <!-- ==================================================
+       LE SYSTÈME DE JETONS
+       ================================================== -->
+  <section class="doc-section">
+    <div class="doc-head">
+      <h2>Ce qu'un thème change vraiment</h2>
+      <p>Un thème n'est pas une palette : c'est un jeu complet de variables CSS — couleurs, familles typographiques, rayons, épaisseur des filets, densité, hauteur des cibles tactiles. Les composants ne connaissent que les variables, jamais les valeurs. Les cartes ci-dessous se relisent en direct sur le thème actif.</p>
+    </div>
+    <div class="tok-grid">
+      <div class="tok-card"><h3>Surfaces et encre</h3><div data-tok="--bg,--surface,--surface-2,--surface-3,--ink,--ink-2,--ink-3,--line,--line-strong"></div></div>
+      <div class="tok-card"><h3>Action et signal</h3><div data-tok="--accent,--accent-ink,--accent-soft,--signal,--focus,--data"></div></div>
+      <div class="tok-card"><h3>Statuts</h3><div data-tok="--st-new-fg,--st-prog-fg,--st-wait-fg,--st-done-fg,--st-new-bg,--st-prog-bg,--st-wait-bg,--st-done-bg"></div></div>
+      <div class="tok-card"><h3>Priorités</h3><div data-tok="--pr-urg-bar,--pr-imp-bar,--pr-nor-bar,--crit,--warn,--ok"></div></div>
+      <div class="tok-card"><h3>Typographie</h3>
+        <div class="spec-line"><span class="k">Display</span><b data-spec="--font-display" style="font-family:var(--font-display);font-size:15px"></b></div>
+        <div class="spec-line"><span class="k">Interface</span><b data-spec="--font-ui" style="font-size:14px"></b></div>
+        <div class="spec-line"><span class="k">Données</span><b data-spec="--font-mono" style="font-family:var(--font-mono);font-size:13px"></b></div>
+        <div class="spec-line"><span class="k">Corps</span><b data-spec="--fs-base"></b></div>
+        <div class="spec-line"><span class="k">Micro-libellé</span><span class="label">Employé concerné</span></div>
+        <p style="margin-top:12px;font-family:var(--font-display);font-weight:var(--display-w);font-size:28px;letter-spacing:var(--display-ls)">Registre 42</p>
+      </div>
+      <div class="tok-card"><h3>Forme et densité</h3>
+        <div class="spec-line"><span class="k">Rayon carte</span><b data-spec="--r-card"></b><span style="width:34px;height:20px;background:var(--accent-soft);border:var(--bw) solid var(--accent);border-radius:var(--r-card)"></span></div>
+        <div class="spec-line"><span class="k">Rayon contrôle</span><b data-spec="--r-ctl"></b></div>
+        <div class="spec-line"><span class="k">Filet</span><b data-spec="--bw"></b></div>
+        <div class="spec-line"><span class="k">Cible tactile</span><b data-spec="--touch"></b></div>
+        <div class="spec-line"><span class="k">Marge carte</span><b data-spec="--pad-card"></b></div>
+        <div class="spec-line"><span class="k">Ombre</span><span style="display:inline-block;width:46px;height:22px;background:var(--surface);border:var(--bw) solid var(--line);border-radius:var(--r-ctl);box-shadow:var(--sh-2)"></span></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="doc-rule"></div>
+
+  <!-- ==================================================
+       BIBLIOTHÈQUE DE COMPOSANTS
+       ================================================== -->
+  <section class="doc-section">
+    <div class="doc-head">
+      <h2>Bibliothèque de composants</h2>
+      <p>Les vingt et un composants imposés par la spécification UX gelée, rendus dans le thème actif. La couleur n'est jamais le seul indicateur : chaque statut porte un glyphe et un mot.</p>
+    </div>
+
+    <div class="lib">
+      <div class="lib-cell"><h3 class="label">Boutons</h3>
+        <div class="lib-row"><button class="btn btn--primary" type="button">Enregistrer</button><button class="btn btn--secondary" type="button">Annuler</button></div>
+        <div class="lib-row"><button class="btn btn--ghost btn--sm" type="button">Modifier</button><button class="btn btn--danger btn--sm" type="button">Caviarder</button><button class="btn btn--secondary btn--sm" type="button" disabled>Indisponible</button></div>
+      </div>
+
+      <div class="lib-cell"><h3 class="label">Statuts</h3>
+        <div class="lib-row">
+          <span class="badge badge--new"><i aria-hidden="true">◇</i>Nouveau</span>
+          <span class="badge badge--prog"><i aria-hidden="true">◐</i>En cours</span>
+          <span class="badge badge--wait"><i aria-hidden="true">⏸</i>En attente</span>
+          <span class="badge badge--done"><i aria-hidden="true">✓</i>Résolu</span>
+        </div>
+        <div class="lib-row"><span class="badge badge--late"><i aria-hidden="true">◷</i>En retard</span><span class="badge badge--role">Gestionnaire</span></div>
+      </div>
+
+      <div class="lib-cell"><h3 class="label">Priorités</h3>
+        <div class="lib-row">
+          <span class="badge badge--urgent"><i aria-hidden="true">▲</i>Urgente</span>
+          <span class="badge badge--important"><i aria-hidden="true">◆</i>Importante</span>
+          <span class="badge badge--normal"><i aria-hidden="true">●</i>Normale</span>
+        </div>
+        <div class="lib-row"><span class="tiny">La barre latérale de la carte reprend la même priorité — l'information passe par deux canaux.</span></div>
+      </div>
+
+      <div class="lib-cell"><h3 class="label">Filtres actifs</h3>
+        <div class="lib-row filterchips" style="margin:0">
+          <span class="fchip"><b>Statut</b> En cours <x aria-hidden="true">✕</x></span>
+          <span class="fchip"><b>Priorité</b> Urgente <x aria-hidden="true">✕</x></span>
+        </div>
+      </div>
+
+      <div class="lib-cell"><h3 class="label">Champ avec erreur</h3>
+        <div class="field is-error"><label for="lib-f">Que s'est-il passé ?<span class="counter num">18 / 2000</span></label>
+          <input class="input" id="lib-f" value="Palette incomplète">
+          <span class="err"><svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.2"><use href="#i-alert"/></svg>20 caractères minimum.</span></div>
+      </div>
+
+      <div class="lib-cell"><h3 class="label">Sélecteur d'impacts</h3>
+        <div class="chips">
+          <button class="chip" type="button" aria-pressed="true">Retard client</button>
+          <button class="chip" type="button" aria-pressed="false">Temps perdu</button>
+          <button class="chip" type="button" aria-pressed="false" disabled>Perte financière</button>
+        </div>
+      </div>
+
+      <div class="lib-cell"><h3 class="label">Chargement</h3>
+        <div class="skel" style="width:38%"></div>
+        <div class="skel" style="width:100%;margin-top:9px;height:16px"></div>
+        <div class="skel" style="width:72%;margin-top:7px"></div>
+        <p class="tiny" style="margin-top:11px">Squelette de mise en page, jamais un rouet plein écran.</p>
+      </div>
+
+      <div class="lib-cell"><h3 class="label">Liste vide</h3>
+        <div class="state" style="padding:22px 14px"><svg viewBox="0 0 24 24"><use href="#i-inbox"/></svg><b>Aucun dossier ne correspond</b><p>Aucun dossier ne correspond à ces filtres.</p><button class="btn btn--secondary btn--sm" type="button">Réinitialiser les filtres</button></div>
+      </div>
+
+      <div class="lib-cell"><h3 class="label">Erreur réseau</h3>
+        <div class="state" style="padding:22px 14px"><svg viewBox="0 0 24 24"><use href="#i-offline"/></svg><b>Connexion perdue</b><p>Votre saisie est conservée. Réessayez quand le réseau revient.</p><button class="btn btn--secondary btn--sm" type="button"><svg viewBox="0 0 24 24"><use href="#i-refresh"/></svg>Réessayer</button></div>
+      </div>
+
+      <div class="lib-cell"><h3 class="label">Conflit d'édition — 409</h3>
+        <div class="dialog" style="box-shadow:none;max-width:none">
+          <h4>Le dossier a changé</h4>
+          <p>Quelqu'un a enregistré une modification depuis votre dernière lecture. Vos changements n'ont pas été écrasés.</p>
+          <div class="dialog-actions"><button class="btn btn--primary btn--sm" type="button">Recharger le dossier</button><button class="btn btn--secondary btn--sm" type="button">Copier mon texte</button></div>
+        </div>
+      </div>
+
+      <div class="lib-cell"><h3 class="label">Confirmation</h3>
+        <div class="dialog" style="box-shadow:none;max-width:none">
+          <h4>Caviarder ce commentaire ?</h4>
+          <p>Le texte sera masqué pour tous. L'entrée reste visible dans l'historique avec la mention du caviardage.</p>
+          <div class="dialog-actions"><button class="btn btn--danger btn--sm" type="button">Caviarder</button><button class="btn btn--ghost btn--sm" type="button">Annuler</button></div>
+        </div>
+      </div>
+
+      <div class="lib-cell"><h3 class="label">Confirmation courte</h3>
+        <div class="lib-row"><span class="toast"><svg viewBox="0 0 24 24"><use href="#i-check"/></svg>Dossier créé — INC-000042</span></div>
+        <p class="tiny" style="margin-top:12px">4 à 6 secondes, jamais seule porteuse d'une erreur de validation.</p>
+      </div>
+
+      <div class="lib-cell lib-cell--wide"><h3 class="label">Bloc de triage — dossier au statut « Nouveau »</h3>
+        <div class="notice notice--accent">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-flag"/></svg>
+          <div><b>Ce dossier doit être pris en charge</b>
+            <p>Trois champs sont exigés avant de quitter le statut « Nouveau » : la sous-catégorie, le responsable recommandé et le statut cible.</p>
+            <div class="notice-actions"><button class="btn btn--primary btn--sm" type="button">Prendre en charge</button><button class="btn btn--ghost btn--sm" type="button">Voir les champs manquants</button></div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <div class="doc-rule"></div>
+
+  <footer class="studio-foot">
+    <span>Maquette visuelle — contenus fictifs, aucune donnée réelle.</span>
+    <span>Écrans conformes aux spécifications UX gelées (v5.0.0) : navigation, ordre des sections, états et messages.</span>
+    <span>Quatre thèmes, un seul jeu de composants.</span>
+  </footer>
+</div>
+
+<div class="tip" id="tip" role="status" aria-live="polite"></div>
+<script>
+(function () {
+  "use strict";
+
+  var root = document.documentElement;
+
+  /* ---------- Métadonnées des thèmes ---------- */
+  var THEMES = {
+    atelier: {
+      name: "Atelier",
+      desc: "Béton clair, filets fins, encre noire. L'orange n'apparaît que là où une action est attendue : c'est le seul signal de la page. Dense, lisible d'un coup d'œil entre deux tâches.",
+      use: "Comptoir · entrepôt · poste fixe"
+    },
+    ardoise: {
+      name: "Ardoise",
+      desc: "Bleu-gris froid, teal profond, titres en romain. Cartes espacées, chiffres larges, moins de dossiers par écran : fait pour lire, comparer et décider plutôt que pour saisir vite.",
+      use: "Gestionnaire · direction · analyse"
+    },
+    nuit: {
+      name: "Poste de nuit",
+      desc: "Console de répartition : fond sombre, trame de points, chiffres monospacés, statuts entre crochets. Conçu pour un écran d'atelier dans une pièce peu éclairée, sans éblouir.",
+      use: "Soir et nuit · écran d'atelier"
+    },
+    hv: {
+      name: "Haute visibilité",
+      desc: "Noir sur blanc, filets de 2 px, jaune sécurité, texte à 17 px et cibles de 56 px. Aucune ombre, aucun dégradé : ce qui reste lisible avec des gants, en plein soleil, dans un camion.",
+      use: "Route · installation · terrain"
+    }
+  };
+
+  var tnName = document.getElementById("tn-name");
+  var tnDesc = document.getElementById("tn-desc");
+  var tnUse  = document.getElementById("tn-use");
+
+  function setTheme(key) {
+    if (!THEMES[key]) key = "atelier";
+    root.setAttribute("data-mq", key);
+    var t = THEMES[key];
+    tnName.textContent = t.name;
+    tnDesc.textContent = t.desc;
+    tnUse.textContent  = t.use;
+    document.querySelectorAll("#themes .swatch").forEach(function (b) {
+      b.setAttribute("aria-pressed", String(b.dataset.theme === key));
+    });
+    try { localStorage.setItem("mq-theme", key); } catch (e) {}
+    // Les jetons sont relus après le changement de thème.
+    requestAnimationFrame(renderTokens);
+  }
+
+  document.getElementById("themes").addEventListener("click", function (e) {
+    var b = e.target.closest(".swatch");
+    if (b) setTheme(b.dataset.theme);
+  });
+
+  /* ---------- Format d'écran ---------- */
+  var stage = document.getElementById("stage");
+  document.getElementById("vp").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-vp]");
+    if (!b) return;
+    stage.setAttribute("data-vp", b.dataset.vp);
+    this.querySelectorAll("button").forEach(function (x) {
+      x.setAttribute("aria-pressed", String(x === b));
+    });
+  });
+
+  /* ---------- Navigation entre écrans ---------- */
+  var reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function goTo(name) {
+    var found = false;
+    document.querySelectorAll(".screen").forEach(function (s) {
+      var on = s.dataset.screen === name;
+      s.classList.toggle("is-active", on);
+      if (on) found = true;
+    });
+    if (!found) return;
+    // Le détail n'a pas d'entrée de menu : on garde « Registre » allumé.
+    var navKey = name === "detail" ? "registre" : name;
+    document.querySelectorAll(".navitem, .tabbar button").forEach(function (b) {
+      if (b.dataset.go === navKey) b.setAttribute("aria-current", "page");
+      else b.removeAttribute("aria-current");
+    });
+    var top = stage.getBoundingClientRect().top;
+    if (top < 0) stage.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }
+
+  document.addEventListener("click", function (e) {
+    var go = e.target.closest("[data-go]");
+    if (!go) return;
+    e.preventDefault();
+    goTo(go.dataset.go);
+  });
+
+  /* ---------- Onglets internes (Analyse, Administration) ---------- */
+  document.querySelectorAll("[data-tabs]").forEach(function (bar) {
+    bar.addEventListener("click", function (e) {
+      var b = e.target.closest("button[data-panel]");
+      if (!b) return;
+      bar.querySelectorAll("button").forEach(function (x) {
+        x.setAttribute("aria-selected", String(x === b));
+      });
+      var screen = bar.closest(".screen");
+      screen.querySelectorAll(".panel").forEach(function (p) {
+        p.classList.toggle("is-active", p.dataset.panel === b.dataset.panel);
+      });
+    });
+  });
+
+  /* ---------- Sélecteurs (impacts, priorité) ---------- */
+  document.addEventListener("click", function (e) {
+    var chip = e.target.closest(".chip");
+    if (chip && !chip.disabled && chip.tagName === "BUTTON") {
+      chip.setAttribute("aria-pressed", chip.getAttribute("aria-pressed") === "true" ? "false" : "true");
+    }
+    var prio = e.target.closest(".prio button");
+    if (prio) {
+      prio.parentNode.querySelectorAll("button").forEach(function (x) {
+        x.setAttribute("aria-pressed", String(x === prio));
+      });
+    }
+    var x = e.target.closest(".fchip x");
+    if (x) x.closest(".fchip").remove();
+  });
+
+  /* ---------- Infobulles des graphiques ---------- */
+  var tip = document.getElementById("tip");
+  document.addEventListener("pointerover", function (e) {
+    var el = e.target.closest("[data-tip]");
+    if (!el) return;
+    tip.textContent = el.dataset.tip;
+    tip.classList.add("on");
+    var r = el.getBoundingClientRect();
+    tip.style.left = Math.min(window.innerWidth - tip.offsetWidth - 10, Math.max(8, r.left + r.width / 2 - tip.offsetWidth / 2)) + "px";
+    tip.style.top = Math.max(8, r.top - tip.offsetHeight - 8) + "px";
+  });
+  document.addEventListener("pointerout", function (e) {
+    if (e.target.closest("[data-tip]")) tip.classList.remove("on");
+  });
+
+  /* ---------- Inspecteur de jetons ---------- */
+  function val(name) {
+    return getComputedStyle(root).getPropertyValue(name).trim();
+  }
+  function renderTokens() {
+    document.querySelectorAll("[data-tok]").forEach(function (box) {
+      box.innerHTML = box.dataset.tok.split(",").map(function (n) {
+        var v = val(n);
+        return '<div class="tok-row"><span class="tok-sw" style="background:' + v + '"></span>' +
+               '<span class="tok-name">' + n + '</span><span class="tok-val">' + v + "</span></div>";
+      }).join("");
+    });
+    document.querySelectorAll("[data-spec]").forEach(function (el) {
+      var v = val(el.dataset.spec);
+      if (el.dataset.spec.indexOf("font") === 0 || el.dataset.spec.indexOf("--font") === 0) {
+        v = v.split(",")[0].replace(/["']/g, "");
+      }
+      el.textContent = v;
+    });
+  }
+
+  /* ---------- Démarrage ---------- */
+  var saved = null;
+  try { saved = localStorage.getItem("mq-theme"); } catch (e) {}
+  setTheme(saved || "atelier");
+  renderTokens();
+})();
+</script>
