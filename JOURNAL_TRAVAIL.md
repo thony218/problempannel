@@ -30,7 +30,8 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 | Vague | Statut |
 |---|---|
 | Bootstrap 0 | PRESQUE TERMINÉ — il ne reste que "CI verte" (bloqué : aucun remote Git configuré) |
-| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01 + ISSUE-01/02/03/04 + LIST-01/02/03 + DETAIL-01 + FLOW-01 faits ; META-02 UI, ISSUE-05+, FLOW-02/03/04 restent) |
+| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01 + ISSUE-01/02/03/04 + LIST-01/02/03 + DETAIL-01 + FLOW-01/02 faits ; META-02 UI, ISSUE-05+, FLOW-03/04 restent) |
+
 | Vague B — Tranches verticales | NON DÉMARRÉE |
 | Vague C | NON DÉMARRÉE |
 | Vague D | NON DÉMARRÉE |
@@ -332,4 +333,39 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
   - Alternative non bloquée : `META-02` (bootstrap UI React) reste non démarrée.
 
 ---
+
+### 2026-08-24 — Matrice des transitions de statut 16 cellules (FLOW-02)
+
+- **Task IDs** : FLOW-02 (matrice exhaustive des transitions de statut, 16 cellules, `01_produit/03_MATRICE_TRANSITIONS.md`)
+- **Date** : 2026-08-24
+- **Owner** : Intégrateur (agent), sur demande explicite de l'utilisateur (« Applique maintenant FLOW-02 »).
+- **Lu avant d'implémenter** : `01_produit/03_MATRICE_TRANSITIONS.md` (matrice 4x4 et règles d'exclusion), `01_produit/04_MATRICE_PERMISSIONS.md` (droits des rôles employee/manager/admin), `01_produit/07_SCENARIOS_ACCEPTATION.md` (S06, S07, S08), `02_contrats/05_ERREURS.md` (`INVALID_STATUS_TRANSITION` = 422 vs `FORBIDDEN` = 403).
+- **Fichiers produits/modifiés** :
+  - `worker/domain/transitions.ts` — `validateStatusTransition({ fromStatus, toStatus, actorRole, isOwner })` :
+    - 4 transitions structurellement impossibles dans le graphe d'états pour TOUT rôle (`inProgress → new`, `waiting → new`, `resolved → new`, `resolved → waiting`) déclenchent `AppError("INVALID_STATUS_TRANSITION", ...)` (HTTP 422).
+    - 6 transitions réservées exclusivement aux gestionnaires/administrateurs (`new → inProgress`, `new → waiting`, `new → resolved`, `inProgress → resolved`, `waiting → resolved`, `resolved → inProgress`) déclenchent `AppError("FORBIDDEN", ...)` (HTTP 403) si tentées par un employé (`S08`).
+    - 2 transitions d'attente (`inProgress ↔ waiting`) autorisées aux gestionnaires/admins ainsi qu'aux employés **s'ils sont le responsable désigné** (`isOwner`, `S06`, `S07`), et rejetées en `FORBIDDEN` (HTTP 403) pour tout autre employé (`S08`).
+    - 4 transitions réflexives (`same → same`) acceptées en no-op pour tous les rôles.
+  - `worker/db/issues.ts` — Export de `STATUS_DB_TO_API` pour résoudre le statut courant D1 en statut API `ApiIssueStatus`.
+  - `worker/services/issues.ts` — `updateIssue` prend maintenant `actorRole: Role` et appelle `validateStatusTransition` dès que `input.status` est fourni et diffère de `current.status`.
+  - `worker/routes/issues.ts` — Route `PATCH /issues/:publicId` passe `c.get("user").role` à `updateIssue`.
+  - Tests :
+    - `tests/api/transitions-matrix.test.ts` — 13 tests unitaires exhaustifs testant les 16 cellules de la matrice sous toutes les combinaisons de rôles (`employee` non-owner, `employee` owner, `manager`, `admin`).
+    - `tests/api/issues-update.test.ts` — 21 tests d'intégration mis à jour avec vérification explicite des scénarios d'acceptation `S06` (owner inProgress → waiting avec supplier+label), `S07` (owner waiting → inProgress), `S08` (non-owner employee change status → 403), et rejets 422 sur transitions impossibles.
+- **Commandes exécutées** :
+  - `npm run typecheck` (app, worker, test, e2e) → OK (0 erreur)
+  - `npx vitest run tests/api/transitions-matrix.test.ts tests/api/issues-update.test.ts` → **34/34 passés**
+  - `npm run test` (suite complète de tests) → **106/106 passés** (15 fichiers)
+  - `npm run verify` (from clean) → **exit 0**, **106/106 tests**
+- **`npm run verify`** : **PASS** (exit 0)
+- **Staging testé** : non.
+- **Limitations connues / dette** :
+  - `FLOW-03` (préconditions de résolution : cause, correction, apprentissage, vérification d'absence d'actions bloquantes ouvertes, date de révision si pending) et `FLOW-04` (réouverture : exigence et persistance de `reopenReason`) restent à implémenter.
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : Intégrateur (agent) ou humain.
+  - Côté backend : `FLOW-03` (préconditions complètes de résolution / reviewDate, S08-S10) puis `FLOW-04` (règles de réouverture et historisation de `reopenReason`, S11/S13).
+  - Côté frontend : `META-02` (Bootstrap React / Auth / Meta) pour démarrer l'interface.
+
+---
+
 

@@ -2,26 +2,29 @@ import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { app } from "../../worker/index";
 
-const DEV_HEADER = { "X-Dev-User-Email": "creator@example.test", "Content-Type": "application/json" };
+const EMPLOYEE_HEADER = { "X-Dev-User-Email": "creator@example.test", "Content-Type": "application/json" };
+const MANAGER_HEADER = { "X-Dev-User-Email": "second@example.test", "Content-Type": "application/json" };
+const OTHER_EMPLOYEE_HEADER = { "X-Dev-User-Email": "other_emp@example.test", "Content-Type": "application/json" };
 
-async function get(path: string) {
-  return app.request(`http://local/api${path}`, { method: "GET", headers: DEV_HEADER }, env);
+async function get(path: string, headers = EMPLOYEE_HEADER) {
+  return app.request(`http://local/api${path}`, { method: "GET", headers }, env);
 }
 
-async function post(path: string, body: unknown) {
-  return app.request(`http://local/api${path}`, { method: "POST", headers: DEV_HEADER, body: JSON.stringify(body) }, env);
+async function post(path: string, body: unknown, headers = EMPLOYEE_HEADER) {
+  return app.request(`http://local/api${path}`, { method: "POST", headers, body: JSON.stringify(body) }, env);
 }
 
-async function patch(path: string, body: unknown, headers: Record<string, string> = {}) {
+async function patch(path: string, body: unknown, headers: Record<string, string> = {}, authHeader = EMPLOYEE_HEADER) {
   return app.request(
     `http://local/api${path}`,
-    { method: "PATCH", headers: { ...DEV_HEADER, ...headers }, body: JSON.stringify(body) },
+    { method: "PATCH", headers: { ...authHeader, ...headers }, body: JSON.stringify(body) },
     env
   );
 }
 
 let userId: number;
 let secondUserId: number;
+let otherEmployeeId: number;
 let locationId: number;
 let categoryId: number;
 let otherCategoryId: number;
@@ -47,9 +50,16 @@ beforeEach(async () => {
       "INSERT INTO users (email, display_name, role, active) VALUES ('creator@example.test', 'Créateur', 'employee', 1) RETURNING id"
     ).first<{ id: number }>()
   )!.id;
+
   secondUserId = (
     await env.DB.prepare(
-      "INSERT INTO users (email, display_name, role, active) VALUES ('second@example.test', 'Deuxième', 'manager', 1) RETURNING id"
+      "INSERT INTO users (email, display_name, role, active) VALUES ('second@example.test', 'Gestionnaire', 'manager', 1) RETURNING id"
+    ).first<{ id: number }>()
+  )!.id;
+
+  otherEmployeeId = (
+    await env.DB.prepare(
+      "INSERT INTO users (email, display_name, role, active) VALUES ('other_emp@example.test', 'Autre Employé', 'employee', 1) RETURNING id"
     ).first<{ id: number }>()
   )!.id;
 
@@ -145,7 +155,7 @@ describe("PATCH /api/issues/:publicId", () => {
   });
 
   it("S15: rejects a mismatched If-Match with 409", async () => {
-    const { publicId } = await createIssue();
+    const { publicId, etag } = await createIssue();
     const res = await patch(`/issues/${publicId}`, { description: "x".repeat(20) }, { "If-Match": "issue-1-v999" });
     expect(res.status).toBe(409);
     const body = (await res.json()) as any;
@@ -198,15 +208,20 @@ describe("PATCH /api/issues/:publicId", () => {
 
   it("rejects leaving 'new' without a subcategory (structural equivalent of S04)", async () => {
     const { publicId, etag } = await createIssue();
-    const res = await patch(`/issues/${publicId}`, { status: "inProgress" }, { "If-Match": etag });
+    const res = await patch(`/issues/${publicId}`, { status: "inProgress" }, { "If-Match": etag }, MANAGER_HEADER);
     expect(res.status).toBe(422);
     const body = (await res.json()) as any;
     expect(body.error.fields.subcategoryId).toBeDefined();
   });
 
-  it("accepts leaving 'new' when a subcategory is provided in the same PATCH", async () => {
+  it("accepts leaving 'new' when a subcategory is provided in the same PATCH (manager)", async () => {
     const { publicId, etag } = await createIssue();
-    const res = await patch(`/issues/${publicId}`, { status: "inProgress", subcategoryId }, { "If-Match": etag });
+    const res = await patch(
+      `/issues/${publicId}`,
+      { status: "inProgress", subcategoryId },
+      { "If-Match": etag },
+      MANAGER_HEADER
+    );
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
     expect(body.data.issue.status).toBe("inProgress");
@@ -214,18 +229,19 @@ describe("PATCH /api/issues/:publicId", () => {
 
   it("rejects status='waiting' without waitingOn", async () => {
     const { publicId, etag } = await createIssue({ subcategoryId });
-    const res = await patch(`/issues/${publicId}`, { status: "waiting" }, { "If-Match": etag });
+    const res = await patch(`/issues/${publicId}`, { status: "waiting" }, { "If-Match": etag }, MANAGER_HEADER);
     expect(res.status).toBe(422);
     const body = (await res.json()) as any;
     expect(body.error.fields.waitingOn).toBeDefined();
   });
 
-  it("accepts status='waiting' with a supplier waitingOn + label (S06-equivalent)", async () => {
+  it("accepts status='waiting' with a supplier waitingOn + label (manager)", async () => {
     const { publicId, etag } = await createIssue({ subcategoryId });
     const res = await patch(
       `/issues/${publicId}`,
       { status: "waiting", waitingOn: { type: "supplier", label: "Fournisseur ABC" } },
-      { "If-Match": etag }
+      { "If-Match": etag },
+      MANAGER_HEADER
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
@@ -233,34 +249,46 @@ describe("PATCH /api/issues/:publicId", () => {
     expect(body.data.issue.waitingOn).toEqual({ type: "supplier", userId: null, label: "Fournisseur ABC" });
   });
 
-  it("auto-clears waitingOn when leaving 'waiting' without an explicit waitingOn (S07-equivalent)", async () => {
+  it("auto-clears waitingOn when leaving 'waiting' without an explicit waitingOn", async () => {
     const created = await createIssue({ subcategoryId });
     const waitingRes = await patch(
       `/issues/${created.publicId}`,
       { status: "waiting", waitingOn: { type: "customer", label: "Client X" } },
-      { "If-Match": created.etag }
+      { "If-Match": created.etag },
+      MANAGER_HEADER
     );
     const waitingEtag = waitingRes.headers.get("ETag") as string;
 
-    const res = await patch(`/issues/${created.publicId}`, { status: "inProgress" }, { "If-Match": waitingEtag });
+    const res = await patch(
+      `/issues/${created.publicId}`,
+      { status: "inProgress" },
+      { "If-Match": waitingEtag },
+      MANAGER_HEADER
+    );
     expect(res.status).toBe(200);
     const body = (await res.json()) as any;
     expect(body.data.issue.status).toBe("inProgress");
     expect(body.data.issue.waitingOn).toBeNull();
   });
 
-  it("manages resolvedAt/resolvedByUserId when entering and leaving 'resolved'", async () => {
+  it("manages resolvedAt/resolvedByUserId when entering and leaving 'resolved' (manager)", async () => {
     const created = await createIssue({ subcategoryId });
-    const resolvedRes = await patch(`/issues/${created.publicId}`, { status: "resolved" }, { "If-Match": created.etag });
+    const resolvedRes = await patch(
+      `/issues/${created.publicId}`,
+      { status: "resolved" },
+      { "If-Match": created.etag },
+      MANAGER_HEADER
+    );
     expect(resolvedRes.status).toBe(200);
     const resolvedBody = (await resolvedRes.json()) as any;
     expect(resolvedBody.data.issue.resolvedAt).not.toBeNull();
-    expect(resolvedBody.data.issue.resolvedByUserId).toBe(userId);
+    expect(resolvedBody.data.issue.resolvedByUserId).toBe(secondUserId);
 
     const reopenRes = await patch(
       `/issues/${created.publicId}`,
       { status: "inProgress" },
-      { "If-Match": resolvedRes.headers.get("ETag") as string }
+      { "If-Match": resolvedRes.headers.get("ETag") as string },
+      MANAGER_HEADER
     );
     expect(reopenRes.status).toBe(200);
     const reopenBody = (await reopenRes.json()) as any;
@@ -319,5 +347,118 @@ describe("PATCH /api/issues/:publicId", () => {
     const payload = JSON.parse(rows.results[0].payload_json);
     expect(payload.fields).toEqual(["description"]);
     expect(JSON.stringify(payload)).not.toContain("confidentiel");
+  });
+
+  describe("Matrice des transitions FLOW-02 (S06, S07, S08 et 16 cellules)", () => {
+    it("S08: non-owner employee cannot transition new -> inProgress (403)", async () => {
+      const { publicId, etag } = await createIssue({ subcategoryId });
+      const res = await patch(`/issues/${publicId}`, { status: "inProgress" }, { "If-Match": etag }, EMPLOYEE_HEADER);
+      expect(res.status).toBe(403);
+      const body = (await res.json()) as any;
+      expect(body.error.code).toBe("FORBIDDEN");
+    });
+
+    it("S06: employee OWNER can transition inProgress -> waiting with supplier+label", async () => {
+      // Manager passe le dossier à inProgress et assigne userId (creator) comme owner
+      const { publicId, etag } = await createIssue({ subcategoryId });
+      const progressRes = await patch(
+        `/issues/${publicId}`,
+        { status: "inProgress", ownerUserId: userId },
+        { "If-Match": etag },
+        MANAGER_HEADER
+      );
+      expect(progressRes.status).toBe(200);
+      const progressEtag = progressRes.headers.get("ETag") as string;
+
+      // L'employé owner passe à waiting
+      const waitRes = await patch(
+        `/issues/${publicId}`,
+        { status: "waiting", waitingOn: { type: "supplier", label: "Fournisseur Test" } },
+        { "If-Match": progressEtag },
+        EMPLOYEE_HEADER
+      );
+      expect(waitRes.status).toBe(200);
+      const waitBody = (await waitRes.json()) as any;
+      expect(waitBody.data.issue.status).toBe("waiting");
+    });
+
+    it("S08: non-owner employee cannot transition inProgress -> waiting (403)", async () => {
+      const { publicId, etag } = await createIssue({ subcategoryId });
+      const progressRes = await patch(
+        `/issues/${publicId}`,
+        { status: "inProgress", ownerUserId: userId },
+        { "If-Match": etag },
+        MANAGER_HEADER
+      );
+      const progressEtag = progressRes.headers.get("ETag") as string;
+
+      // Un AUTRE employé tente de passer à waiting -> 403
+      const res = await patch(
+        `/issues/${publicId}`,
+        { status: "waiting", waitingOn: { type: "supplier", label: "Fournisseur Test" } },
+        { "If-Match": progressEtag },
+        OTHER_EMPLOYEE_HEADER
+      );
+      expect(res.status).toBe(403);
+    });
+
+    it("S07: employee OWNER can transition waiting -> inProgress", async () => {
+      const { publicId, etag } = await createIssue({ subcategoryId });
+      const waitRes = await patch(
+        `/issues/${publicId}`,
+        { status: "waiting", ownerUserId: userId, waitingOn: { type: "customer", label: "Client ABC" } },
+        { "If-Match": etag },
+        MANAGER_HEADER
+      );
+      const waitEtag = waitRes.headers.get("ETag") as string;
+
+      // L'employé owner repasse à inProgress
+      const progressRes = await patch(
+        `/issues/${publicId}`,
+        { status: "inProgress" },
+        { "If-Match": waitEtag },
+        EMPLOYEE_HEADER
+      );
+      expect(progressRes.status).toBe(200);
+      const progressBody = (await progressRes.json()) as any;
+      expect(progressBody.data.issue.status).toBe("inProgress");
+    });
+
+    it("rejects impossible transition inProgress -> new with 422 INVALID_STATUS_TRANSITION", async () => {
+      const { publicId, etag } = await createIssue({ subcategoryId });
+      const progressRes = await patch(
+        `/issues/${publicId}`,
+        { status: "inProgress" },
+        { "If-Match": etag },
+        MANAGER_HEADER
+      );
+      const progressEtag = progressRes.headers.get("ETag") as string;
+
+      const res = await patch(`/issues/${publicId}`, { status: "new" }, { "If-Match": progressEtag }, MANAGER_HEADER);
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as any;
+      expect(body.error.code).toBe("INVALID_STATUS_TRANSITION");
+    });
+
+    it("rejects impossible transition resolved -> waiting with 422 INVALID_STATUS_TRANSITION", async () => {
+      const { publicId, etag } = await createIssue({ subcategoryId });
+      const resolvedRes = await patch(
+        `/issues/${publicId}`,
+        { status: "resolved" },
+        { "If-Match": etag },
+        MANAGER_HEADER
+      );
+      const resolvedEtag = resolvedRes.headers.get("ETag") as string;
+
+      const res = await patch(
+        `/issues/${publicId}`,
+        { status: "waiting", waitingOn: { type: "other", label: "Autre" } },
+        { "If-Match": resolvedEtag },
+        MANAGER_HEADER
+      );
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as any;
+      expect(body.error.code).toBe("INVALID_STATUS_TRANSITION");
+    });
   });
 });

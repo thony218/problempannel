@@ -8,6 +8,7 @@ import {
   CAUSE_STATUS_API_TO_DB,
   PERMANENT_CORRECTION_TYPE_API_TO_DB,
   STATUS_API_TO_DB,
+  STATUS_DB_TO_API,
   findIssueByPublicId,
   findIssueRowById,
   insertIssue,
@@ -23,7 +24,9 @@ import { findImpactsByIssueId } from "../db/impacts";
 import { findCorrectiveActionsByIssueId } from "../db/corrective-actions";
 import { insertHistoryEventStatement } from "../db/history";
 import { issueETag } from "../domain/etag";
+import { validateStatusTransition, type Role } from "../domain/transitions";
 import type { CreateIssueInput, ListIssuesQuery, UpdateIssueInput } from "../validation/issues";
+
 
 export type IssueDetail = components["schemas"]["IssueDetail"];
 
@@ -243,6 +246,7 @@ export async function updateIssue(
   publicId: string,
   ifMatch: string,
   actorUserId: number,
+  actorRole: Role,
   input: UpdateIssueInput
 ): Promise<IssueDetail | null> {
   const id = parsePublicId(publicId);
@@ -324,11 +328,18 @@ export async function updateIssue(
 
   const statusTouched = "status" in input;
   const nextStatusDb = statusTouched ? STATUS_API_TO_DB[input.status!] : current.status;
-  if (statusTouched) columns.status = nextStatusDb;
+  if (statusTouched && input.status) {
+    const fromStatus = STATUS_DB_TO_API[current.status];
+    const toStatus = input.status;
+    const isOwner = current.owner_user_id === actorUserId;
+    validateStatusTransition({ fromStatus, toStatus, actorRole, isOwner });
+    columns.status = nextStatusDb;
+  }
 
   if (nextStatusDb !== "new" && nextSubcategoryId == null && !fields.subcategoryId) {
     fields.subcategoryId = "Sous-catégorie requise pour sortir du statut 'new'.";
   }
+
 
   if ("ownerUserId" in input) {
     if (input.ownerUserId != null && !owner) fields.ownerUserId = "Utilisateur introuvable ou inactif.";

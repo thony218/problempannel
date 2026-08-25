@@ -11,12 +11,13 @@ export type ApiWaitingOn = components["schemas"]["WaitingOn"];
 // D1 = snake_case, API = camelCase (02_contrats/01_CONVENTIONS_NOMMAGE.md).
 // Ces tables associatives sont la seule définition de la correspondance
 // des valeurs d'énumération dans les deux sens.
-const STATUS_DB_TO_API: Record<string, ApiIssueStatus> = {
+export const STATUS_DB_TO_API: Record<string, ApiIssueStatus> = {
   new: "new",
   in_progress: "inProgress",
   waiting: "waiting",
   resolved: "resolved",
 };
+
 
 export const STATUS_API_TO_DB: Record<ApiIssueStatus, string> = {
   new: "new",

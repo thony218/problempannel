@@ -30,14 +30,16 @@ issueRoutes.patch("/issues/:publicId", requireUser, async (c) => {
   if (!ifMatch) {
     throw new AppError("PRECONDITION_REQUIRED", "En-tête If-Match requis.");
   }
+  const user = c.get("user");
   const input = await parseJsonBody(c, updateIssueRequestSchema);
-  const detail = await updateIssue(c.env.DB, c.req.param("publicId"), ifMatch, c.get("user").id, input);
+  const detail = await updateIssue(c.env.DB, c.req.param("publicId"), ifMatch, user.id, user.role, input);
   if (!detail) {
     throw new AppError("NOT_FOUND", "Dossier introuvable.");
   }
   c.header("ETag", issueETag(parsePublicId(detail.issue.publicId) as number, detail.issue.rowVersion));
   return c.json(okBody(detail), 200);
 });
+
 
 issueRoutes.post("/issues", requireUser, async (c) => {
   const input = await parseJsonBody(c, createIssueRequestSchema);
