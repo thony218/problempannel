@@ -3,12 +3,13 @@ import { AppError } from "../domain/errors";
 import { parsePublicId } from "../domain/publicId";
 import { findIssueRowById } from "../db/issues";
 import {
-  deleteIssueLink as dbDeleteLink,
+  deleteIssueLinkStatement,
   findLinkBetween,
   findLinksByIssueId,
-  insertIssueLink,
+  insertIssueLinkStatement,
   mapLinkRow,
   type ApiIssueLink,
+  type IssueLinkRow,
 } from "../db/links";
 import { insertHistoryEventStatement } from "../db/history";
 
@@ -69,26 +70,27 @@ export async function createLink(
     throw new AppError("CONFLICT", "Ces deux dossiers sont déjà liés.");
   }
 
-  const inserted = await insertIssueLink(db, {
-    issueId1,
-    issueId2,
-    createdByUserId: actorUserId,
-  });
-
-  // Consigner l'événement d'historique sur les deux dossiers
-  await Promise.all([
+  // Le lien et les deux événements d'historique dans une seule transaction :
+  // une liaison ne doit jamais apparaître dans l'historique d'un seul des deux
+  // dossiers (G-007).
+  const results = await db.batch<IssueLinkRow>([
+    insertIssueLinkStatement(db, { issueId1, issueId2, createdByUserId: actorUserId }),
     insertHistoryEventStatement(db, issueId1, {
       actorUserId,
       eventType: "link_created",
       payload: { relatedPublicId },
-    }).run(),
+    }),
     insertHistoryEventStatement(db, issueId2, {
       actorUserId,
       eventType: "link_created",
       payload: { relatedPublicId: publicId },
-    }).run(),
+    }),
   ]);
 
+  const inserted = results[0]?.results?.[0];
+  if (!inserted) {
+    throw new Error("Échec de l'insertion du lien.");
+  }
   return mapLinkRow(inserted, issueId1);
 }
 
@@ -118,20 +120,18 @@ export async function removeLink(
     return null;
   }
 
-  await dbDeleteLink(db, issueId1, issueId2);
-
-  // Consigner l'événement d'historique sur les deux dossiers
-  await Promise.all([
+  await db.batch([
+    deleteIssueLinkStatement(db, issueId1, issueId2),
     insertHistoryEventStatement(db, issueId1, {
       actorUserId,
       eventType: "link_deleted",
       payload: { relatedPublicId },
-    }).run(),
+    }),
     insertHistoryEventStatement(db, issueId2, {
       actorUserId,
       eventType: "link_deleted",
       payload: { relatedPublicId: publicId },
-    }).run(),
+    }),
   ]);
 
   return true;

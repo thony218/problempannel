@@ -99,7 +99,8 @@ export async function countOpenBlockingCorrectiveActions(
   return result?.count ?? 0;
 }
 
-export async function insertCorrectiveAction(
+/** Statement d'insertion, à grouper avec son événement d'historique (G-007). */
+export function insertCorrectiveActionStatement(
   db: D1Database,
   data: {
     issueId: number;
@@ -110,10 +111,10 @@ export async function insertCorrectiveAction(
     status: string;
     blocksIssueClosure: boolean;
   }
-): Promise<CorrectiveActionRow> {
+): D1PreparedStatement {
   const completedAt = data.status === "done" ? new Date().toISOString() : null;
 
-  const result = await db
+  return db
     .prepare(
       `INSERT INTO corrective_actions (
          issue_id, title, description, owner_user_id, due_date, status,
@@ -132,13 +133,7 @@ export async function insertCorrectiveAction(
       data.status,
       data.blocksIssueClosure ? 1 : 0,
       completedAt
-    )
-    .first<CorrectiveActionRow>();
-
-  if (!result) {
-    throw new Error("Échec de l'insertion de l'action corrective.");
-  }
-  return result;
+    );
 }
 
 export interface CorrectiveActionColumnUpdates {
@@ -153,16 +148,13 @@ export interface CorrectiveActionColumnUpdates {
   completed_at?: string | null;
 }
 
-export async function updateCorrectiveActionRow(
+/** Statement de mise à jour, à grouper avec son événement d'historique (G-007). */
+export function updateCorrectiveActionRowStatement(
   db: D1Database,
   id: number,
   updates: CorrectiveActionColumnUpdates
-): Promise<CorrectiveActionRow | null> {
+): D1PreparedStatement {
   const keys = Object.keys(updates) as (keyof CorrectiveActionColumnUpdates)[];
-  if (keys.length === 0) {
-    return findCorrectiveActionById(db, id);
-  }
-
   const setClauses = keys.map((k) => `${k} = ?`);
   setClauses.push("updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')");
   const values = keys.map((k) => updates[k]);
@@ -175,10 +167,5 @@ export async function updateCorrectiveActionRow(
               blocks_issue_closure, result, effectiveness_status, completed_at, created_at, updated_at
   `;
 
-  const result = await db
-    .prepare(query)
-    .bind(...values, id)
-    .first<CorrectiveActionRow>();
-
-  return result || null;
+  return db.prepare(query).bind(...values, id);
 }

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../auth/AuthContext";
 import type { components } from "../../shared/api-types.generated";
+import { apiFetch } from "../../shared/apiClient";
 
 export type ApiUser = components["schemas"]["User"];
 export type ApiReferenceItem = components["schemas"]["ReferenceItem"];
@@ -44,7 +45,7 @@ export function AdminView() {
     setLoadingUsers(true);
     setUserError(null);
     try {
-      const res = await fetch("/api/admin/users", { headers: { Accept: "application/json" } });
+      const res = await apiFetch("/api/admin/users", { headers: { Accept: "application/json" } });
       if (!res.ok) throw new Error(`Erreur de chargement des utilisateurs (${res.status}).`);
       const body = (await res.json()) as components["schemas"]["UserListResponse"];
       if (body.ok && Array.isArray(body.data)) setUsers(body.data);
@@ -69,7 +70,7 @@ export function AdminView() {
     };
 
     try {
-      const res = await fetch(`/api/admin/${pathMapping[tabName]}`, { headers: { Accept: "application/json" } });
+      const res = await apiFetch(`/api/admin/${pathMapping[tabName]}`, { headers: { Accept: "application/json" } });
       if (!res.ok) throw new Error(`Erreur de chargement (${res.status}).`);
       const body = (await res.json()) as components["schemas"]["ReferenceListResponse"];
       if (body.ok && Array.isArray(body.data)) setRefItems(body.data);
@@ -97,7 +98,7 @@ export function AdminView() {
     setCreateUserError(null);
 
     try {
-      const res = await fetch("/api/admin/users", {
+      const res = await apiFetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
@@ -129,7 +130,7 @@ export function AdminView() {
 
   const handleUpdateUserRole = async (targetUserId: number, updatedRole: Role) => {
     try {
-      const res = await fetch(`/api/admin/users/${targetUserId}`, {
+      const res = await apiFetch(`/api/admin/users/${targetUserId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ role: updatedRole }),
@@ -142,7 +143,7 @@ export function AdminView() {
 
   const handleToggleUserActive = async (targetUserId: number, currentActive: boolean) => {
     try {
-      const res = await fetch(`/api/admin/users/${targetUserId}`, {
+      const res = await apiFetch(`/api/admin/users/${targetUserId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ active: !currentActive }),
@@ -185,7 +186,7 @@ export function AdminView() {
     }
 
     try {
-      const res = await fetch(`/api/admin/${pathMapping[activeTab]}`, {
+      const res = await apiFetch(`/api/admin/${pathMapping[activeTab]}`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify(payload),
@@ -219,7 +220,7 @@ export function AdminView() {
     };
 
     try {
-      const res = await fetch(`/api/admin/${pathMapping[activeTab]}/${targetId}`, {
+      const res = await apiFetch(`/api/admin/${pathMapping[activeTab]}/${targetId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ active: !currentActive }),

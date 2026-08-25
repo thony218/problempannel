@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../auth/AuthContext";
 import type { components } from "../../shared/api-types.generated";
+import { apiFetch } from "../../shared/apiClient";
+import { useNavigate, useSearchParams } from "react-router";
+import { issueDetailPath } from "../../routes/paths";
+import { businessToday } from "../../shared/businessDate";
 
 export type ApiAnalyticsSummary = components["schemas"]["AnalyticsSummary"];
 export type ApiRecurringGroup = components["schemas"]["RecurringGroup"];
@@ -9,20 +13,42 @@ export type ApiIssue = components["schemas"]["Issue"];
 
 type AnalyticsSubView = "summary" | "recurring" | "effectiveness" | "reviews";
 
-interface AnalyticsViewProps {
-  onSelectIssue?: (publicId: string) => void;
-}
-
-export function AnalyticsView({ onSelectIssue }: AnalyticsViewProps) {
+/**
+ * Tableau de bord analytique.
+ *
+ * Comme pour le Registre, les filtres et l'onglet actif vivent dans l'URL :
+ * un tableau de bord filtré n'a d'intérêt que s'il se partage tel quel avec
+ * un collègue, et l'export CSV doit correspondre à ce que son destinataire
+ * verra en ouvrant le lien.
+ */
+export function AnalyticsView() {
   const { meta } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [activeSubView, setActiveSubView] = useState<AnalyticsSubView>("summary");
+  const onSelectIssue = (publicId: string) => navigate(issueDetailPath(publicId));
+
+  const param = (key: string, fallback = "") => searchParams.get(key) ?? fallback;
+  const setParam = (key: string, value: string, emptyValue = "") => {
+    const next = new URLSearchParams(searchParams);
+    if (value === emptyValue || value === "") next.delete(key);
+    else next.set(key, value);
+    setSearchParams(next, { replace: true });
+  };
+
+  const activeSubView = param("vue", "summary") as AnalyticsSubView;
+  const setActiveSubView = (value: AnalyticsSubView) => setParam("vue", value, "summary");
 
   // Filtres globaux
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [locationId, setLocationId] = useState<number | "">("");
-  const [categoryId, setCategoryId] = useState<number | "">("");
+  const dateFrom = param("dateFrom");
+  const dateTo = param("dateTo");
+  const locationId: number | "" = param("locationId") ? Number(param("locationId")) : "";
+  const categoryId: number | "" = param("categoryId") ? Number(param("categoryId")) : "";
+
+  const setDateFrom = (value: string) => setParam("dateFrom", value);
+  const setDateTo = (value: string) => setParam("dateTo", value);
+  const setLocationId = (value: number | "") => setParam("locationId", value === "" ? "" : String(value));
+  const setCategoryId = (value: number | "") => setParam("categoryId", value === "" ? "" : String(value));
 
   // Données
   const [summary, setSummary] = useState<ApiAnalyticsSummary | null>(null);
@@ -46,10 +72,10 @@ export function AnalyticsView({ onSelectIssue }: AnalyticsViewProps) {
 
     try {
       const [sumRes, recRes, effRes, issuesRes] = await Promise.all([
-        fetch(`/api/analytics/summary${qs}`, { headers: { Accept: "application/json" } }),
-        fetch(`/api/analytics/recurring${qs}`, { headers: { Accept: "application/json" } }),
-        fetch(`/api/analytics/effectiveness${qs}`, { headers: { Accept: "application/json" } }),
-        fetch(`/api/issues?status=resolved&limit=50`, { headers: { Accept: "application/json" } }),
+        apiFetch(`/api/analytics/summary${qs}`, { headers: { Accept: "application/json" } }),
+        apiFetch(`/api/analytics/recurring${qs}`, { headers: { Accept: "application/json" } }),
+        apiFetch(`/api/analytics/effectiveness${qs}`, { headers: { Accept: "application/json" } }),
+        apiFetch(`/api/issues?status=resolved&limit=50`, { headers: { Accept: "application/json" } }),
       ]);
 
       if (sumRes.ok) {
@@ -113,10 +139,16 @@ export function AnalyticsView({ onSelectIssue }: AnalyticsViewProps) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `registre_analyse_${new Date().toISOString().slice(0, 10)}.csv`);
+        // Date métier, pas `toISOString()` : en soirée à Montréal l'UTC est déjà
+    // au lendemain et l'export porterait la date du jour suivant.
+    link.setAttribute(
+      "download",
+      `registre_analyse_${businessToday(meta?.config.businessTimeZone ?? "America/Toronto")}.csv`
+    );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const getLocationLabel = (locId?: number | null) => {

@@ -56,39 +56,34 @@ export async function findLinkBetween(
   return result || null;
 }
 
-export async function insertIssueLink(
+/** Statement d'insertion, à grouper avec ses deux événements d'historique (G-007). */
+export function insertIssueLinkStatement(
   db: D1Database,
   data: {
     issueId1: number;
     issueId2: number;
     createdByUserId: number;
   }
-): Promise<IssueLinkRow> {
+): D1PreparedStatement {
   const [a, b] = data.issueId1 < data.issueId2 ? [data.issueId1, data.issueId2] : [data.issueId2, data.issueId1];
 
-  const result = await db
+  return db
     .prepare(
       `INSERT INTO issue_links (issue_id_a, issue_id_b, link_type, created_by_user_id)
        VALUES (?, ?, 'similar', ?)
        RETURNING id, issue_id_a, issue_id_b, link_type, created_by_user_id, created_at`
     )
-    .bind(a, b, data.createdByUserId)
-    .first<IssueLinkRow>();
-
-  if (!result) {
-    throw new Error("Échec de l'insertion du lien.");
-  }
-  return result;
+    .bind(a, b, data.createdByUserId);
 }
 
-export async function deleteIssueLink(
+/** Statement de suppression, à grouper avec ses deux événements d'historique (G-007). */
+export function deleteIssueLinkStatement(
   db: D1Database,
   issueId1: number,
   issueId2: number
-): Promise<void> {
+): D1PreparedStatement {
   const [a, b] = issueId1 < issueId2 ? [issueId1, issueId2] : [issueId2, issueId1];
-  await db
+  return db
     .prepare("DELETE FROM issue_links WHERE issue_id_a = ? AND issue_id_b = ?")
-    .bind(a, b)
-    .run();
+    .bind(a, b);
 }

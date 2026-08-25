@@ -6,14 +6,18 @@ import {
   countActiveAttachmentsByIssueId,
   findActiveAttachmentsByIssueId,
   findAttachmentById,
-  insertAttachment,
+  insertAttachmentStatement,
   mapAttachmentRow,
-  softDeleteAttachment,
+  softDeleteAttachmentStatement,
   type ApiAttachment,
   type AttachmentRow,
 } from "../db/attachments";
-import { insertHistoryEventStatement } from "../db/history";
+import {
+  insertHistoryEventForJustCreatedChildStatement,
+  insertHistoryEventStatement,
+} from "../db/history";
 import type { AppConfig } from "../domain/config";
+import { detectContentType, matchesDeclaredType, SIGNATURE_BYTES } from "../domain/fileSignature";
 
 export type Role = components["schemas"]["Role"];
 
@@ -77,6 +81,19 @@ export async function uploadAttachment(
     );
   }
 
+  // 2 bis. Le type annoncé doit correspondre au contenu réel.
+  //
+  // `file.type` vient du client : un exécutable renommé `photo.jpg` et déclaré
+  // `image/jpeg` passerait le contrôle précédent sans difficulté. On lit donc
+  // les octets d'en-tête, seule preuve dont dispose le serveur.
+  const header = new Uint8Array(await file.slice(0, SIGNATURE_BYTES).arrayBuffer());
+  if (!matchesDeclaredType(contentType, detectContentType(header))) {
+    throw new AppError(
+      "UNSUPPORTED_FILE_TYPE",
+      `Le contenu du fichier ne correspond pas au type annoncé (${file.type}).`
+    );
+  }
+
   // 3. Validation du quota par issue (S22)
   const currentCount = await countActiveAttachmentsByIssueId(db, issueId);
   if (currentCount >= config.maxAttachmentsPerIssue) {
@@ -96,23 +113,28 @@ export async function uploadAttachment(
     },
   });
 
-  // 5. Enregistrement en base D1
-  const inserted = await insertAttachment(db, {
-    issueId,
-    uploadedByUserId: actorUserId,
-    originalName: file.name,
-    contentType: file.type,
-    sizeBytes: file.size,
-    r2Key,
-  });
+  // 5. Enregistrement en base et trace d'audit dans une seule transaction (G-007)
+  const results = await db.batch<AttachmentRow>([
+    insertAttachmentStatement(db, {
+      issueId,
+      uploadedByUserId: actorUserId,
+      originalName: file.name,
+      contentType: file.type,
+      sizeBytes: file.size,
+      r2Key,
+    }),
+    insertHistoryEventForJustCreatedChildStatement(
+      db,
+      issueId,
+      { actorUserId, eventType: "attachment_uploaded", idPayloadKey: "attachmentId" },
+      "attachments"
+    ),
+  ]);
 
-  // 6. Enregistrement de l'événement d'historique
-  await insertHistoryEventStatement(db, issueId, {
-    actorUserId,
-    eventType: "attachment_uploaded",
-    payload: { attachmentId: inserted.id, originalName: file.name, sizeBytes: file.size },
-  }).run();
-
+  const inserted = results[0]?.results?.[0];
+  if (!inserted) {
+    throw new Error("Échec de l'insertion de la pièce jointe.");
+  }
   return mapAttachmentRow(inserted);
 }
 
@@ -150,17 +172,14 @@ export async function deleteAttachment(
     throw new AppError("FORBIDDEN", "Seuls les gestionnaires et administrateurs peuvent supprimer une pièce jointe.");
   }
 
-  await softDeleteAttachment(db, {
-    attachmentId,
-    deletedByUserId: actorUserId,
-  });
-
-  // Consigner l'événement d'historique
-  await insertHistoryEventStatement(db, row.issue_id, {
-    actorUserId,
-    eventType: "attachment_deleted",
-    payload: { attachmentId },
-  }).run();
+  await db.batch([
+    softDeleteAttachmentStatement(db, { attachmentId, deletedByUserId: actorUserId }),
+    insertHistoryEventStatement(db, row.issue_id, {
+      actorUserId,
+      eventType: "attachment_deleted",
+      payload: { attachmentId },
+    }),
+  ]);
 
   return true;
 }

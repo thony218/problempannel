@@ -737,3 +737,148 @@ Parcours complet exécuté dans un navigateur sur `npm run dev` (première fois 
 ---
 
 
+
+### 2026-08-25 — Second audit : régressions et défauts des vagues LINK/ANA/ADM
+
+- **Task IDs** : aucun nouveau. Revue de `e90b68b` (LINK-01..03, ANA-01..05) et `964f91a` (ADM-01..03, V3-PRIV-01) + correctifs.
+- **Date** : 2026-08-25
+- **Owner** : Intégrateur (agent), sur demande explicite de l'utilisateur (« On a eu beaucoup de travail de fait depuis ton analyse. Refais la »).
+- **Lu avant d'intervenir** : `01_produit/04_MATRICE_PERMISSIONS.md`, `01_produit/08_DEFINITIONS_ANALYTIQUES.md`, `01_produit/09_CAVIARDAGE_ET_HISTORIQUE.md`, `01_produit/07_SCENARIOS_ACCEPTATION.md` (S37, S43-S44), `contracts/openapi.yaml`, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`.
+
+#### Acquis constatés
+
+- **44 / 44 opérations du contrat OpenAPI sont implémentées** (contre 19 au premier audit). Liaisons, analytique, administration et caviardage sont complets.
+- **Remote Git configuré et CI verte** (`gh run list` : succès sur `964f91a`, 1 min 06 s). `V3-BOOT-02` et `FND-05` sont clos.
+- `issue_links` correctement normalisée (`issue_id_a < issue_id_b` + `UNIQUE`) : l'unicité de paire est garantie en base, pas seulement par une vérification applicative.
+- KPI conformes aux définitions : `effectivenessRate = effective / (effective + ineffective)` avec `pending` exclu du dénominateur, `averageResolutionHours = resolved_at - created_at`, récurrence locale `location_id + subcategory_id` et organisation `subcategory_id`, seuil 3/90.
+- Purge R2 effective lors du caviardage (vérifié en lisant le bucket, pas seulement la liste).
+
+#### Défauts corrigés (chacun reproduit avant correctif)
+
+1. **Régression : 17 appels contournent `apiFetch`** — `AdminView` (7), `LinksSection` (4), `AnalyticsView` (4), `RedactModal` (1), et **`IssueDetailView` (1)**.
+   Le cas d'`IssueDetailView` est une régression franche : l'écran passait par `apiFetch` à la fin du premier audit, l'import a été retiré. **Constaté en navigateur : « Erreur lors de la récupération du dossier (401) »** sur un écran qui fonctionnait. Analytique et Administration étaient également hors service en local — le tableau de bord s'affichait entièrement vide, sans message d'erreur, ce qui se lit comme « aucune donnée » plutôt que comme « non authentifié ».
+   Le défaut est invisible à la relecture : derrière Cloudflare Access un `fetch` nu fonctionne, c'est seulement en `APP_ENV=local` qu'il échoue.
+   **Correctif + garde-fou** : `tests/app/api-client-usage.test.ts` échoue désormais en nommant fichier et ligne de tout `fetch` nu sous `src/`. Sensibilité vérifiée par mutation.
+
+2. **Régression : date métier ignorée dans l'analytique** — `worker/db/analytics.ts` utilisait `date('now')` (UTC) pour `overdue_count` et pour la fenêtre de récurrence, alors que `queryIssuesList` applique la date métier depuis le premier audit.
+   **Mesuré à 22 h 28 heure de Montréal, sur un dossier dû aujourd'hui : `/api/issues?overdue=true` renvoie 0, `/api/analytics/summary` renvoie 1.** Deux endpoints, deux réponses contradictoires sur le même dossier au même instant.
+   Corrigé via `appConfigFromEnv` + `businessToday`. Test de cohérence croisée entre les deux endpoints, vérifié par mutation.
+
+3. **Caviardage : cibles ignorées en silence** — un `commentId` ou `attachmentId` inconnu, ou appartenant à un autre dossier, ne touchait aucune ligne (`WHERE id = ? AND issue_id = ?`) et l'appel répondait **200**. **Mesuré : commentaire visé toujours en clair après un caviardage « réussi ».** Sur une procédure de droit à l'oubli, c'est le pire mode d'échec : l'administrateur reçoit une confirmation de destruction pour une donnée intacte.
+   Les cibles sont désormais validées avant toute écriture ; l'opération est refusée en bloc (422) plutôt qu'appliquée à moitié.
+
+4. **Caviardage : échec de suppression R2 avalé** — `r2.delete(key).catch(() => {})` faisait répondre 200 même si le fichier restait dans le bucket. L'erreur remonte maintenant.
+
+5. **Verrouillage administrateur irréversible** — `adminUpdateUser` n'avait aucune protection. **Mesuré : le dernier administrateur se désactive (HTTP 200) → 0 admin actif → tout accès `/admin` répond 403.** Plus aucun compte ne peut créer ni promouvoir un utilisateur ; la seule sortie est un accès SQL direct à la base de production. Deux clics dans l'écran Administration suffisaient.
+   Refus (422) de toute modification laissant zéro administrateur actif. La règle porte sur l'état résultant, elle couvre donc aussi le retrait des droits du dernier *autre* administrateur.
+
+6. **Dérive de configuration dans l'analytique** — `Number(c.env.RECURRING_WINDOW_DAYS || 90)` réimplémentait la lecture de configuration au lieu d'utiliser `appConfigFromEnv`, sans garde contre une valeur non numérique (`NaN`). Aligné.
+
+#### Lacune de test relevée
+
+Le test de caviardage vérifiait l'absence de la pièce jointe **dans la liste** — laquelle filtre sur `deleted_at`. Il serait passé à l'identique si l'objet R2 était resté dans le bucket. Un test S37 interrogeant R2 directement a été ajouté, ainsi que S43/S44 (motif sans cible, tableaux vides) qui n'étaient pas couverts.
+
+- **Commandes exécutées** :
+  - `npm run verify` → **exit 0**, **190 tests** (28 fichiers), build client + worker OK. 182 avant l'intervention.
+  - `gh run list` → CI verte sur le dernier push.
+  - Parcours navigateur sur `npm run dev` : Détail, Analyse (KPI affichés) et Administration (3 comptes listés) vérifiés après correctif.
+- **`npm run verify`** : **PASS** (exit 0).
+- **Staging testé** : non — `wrangler.jsonc` contient toujours `REPLACE_DEV_D1_ID` et `REPLACE_ME`.
+- **Limitations connues / dette** — aucun des points de la phase 1 du premier audit n'a été traité, et deux d'entre eux coûtent maintenant plus cher qu'il y a un jour :
+  - **Aucun routage.** `react-router` toujours en dépendance inutilisée, `src/routes/` toujours vide. Il y a désormais quatre destinations et deux écrans à filtres (Registre, Analyse) : les filtres sont perdus à chaque navigation (**S39**), aucun lien profond n'existe, et l'export CSV ne peut pas être partagé avec son contexte de filtrage.
+  - **Écritures non atomiques** (`UPDATE` puis `db.batch`). Le caviardage ajoute un cas plus grave : une panne en cours de procédure laisse un dossier partiellement caviardé.
+  - **Aucune limitation de débit** (`WRITE_RATE_LIMIT` / `UPLOAD_RATE_LIMIT` déclarées, jamais appelées) et **aucun log de requête** (route, statut, durée, code) exigé par `02_contrats/04_SECURITE_AUTH.md`.
+  - `waiting → inProgress` ne conserve toujours pas l'attente précédente dans l'historique.
+  - La carte du Registre n'affiche toujours ni responsable ni échéance (`03_ECRAN_REGISTRE.md` les veut toujours visibles).
+  - `V4-DRAFT-01` (états `editing`/`pendingUpload`, S45-S47) et `V4-IMG-01` (réduction d'image, S50) restent absents.
+  - Le nom du fichier d'export CSV est daté en UTC (`new Date().toISOString()`), dernière occurrence connue du calcul de date hors fuseau métier. Cosmétique.
+  - Le type MIME des pièces jointes reste celui déclaré par le client.
+- **RFC ouverte** : non. Toujours nécessaire pour le tri du Registre (`03_ECRAN_REGISTRE.md` spécifie quatre tris, `GET /issues` n'a pas de paramètre `sort`).
+- **Prochain propriétaire** : humain (décision `OPS-01`/`OPS-02`) puis intégrateur.
+  - Le contrat d'API étant complet, le seul obstacle restant à une vérification en conditions réelles est le provisionnement Cloudflare.
+
+---
+
+### 2026-08-25 — Résorption complète de la dette technique identifiée aux deux audits
+
+- **Task IDs** : `OPS-03`, `V4-DRAFT-01`, `V4-IMG-01`, complément `LIST-04`, complément `FLOW-02`, plus la dette `G-007` et le routage restés ouverts depuis le premier audit.
+- **Date** : 2026-08-25
+- **Owner** : Intégrateur (agent), sur demande explicite de l'utilisateur (« Fais la totalité des correctifs »).
+- **Lu avant d'implémenter** : `02_contrats/04_SECURITE_AUTH.md` (§Limitation de débit, §Logs), `03_execution/07_BROUILLONS_INDEXEDDB.md`, `03_execution/08_OPTIMISATION_IMAGES_CLIENT.md`, `01_produit/ux/01_NAVIGATION_ET_ARBORESCENCE.md`, `01_produit/ux/03_ECRAN_REGISTRE.md`, `01_produit/03_MATRICE_TRANSITIONS.md`, `01_produit/07_SCENARIOS_ACCEPTATION.md`.
+
+#### 1. Atomicité des écritures et de leur trace d'audit (`G-007`)
+
+Toutes les écritures métier passent désormais par un `db.batch()` unique incluant l'événement d'historique. Plus aucun `insertHistoryEventStatement(...).run()` isolé ne subsiste dans `worker/services/`.
+
+- **Dossiers** (`updateIssue`) : les écritures de suivi précèdent l'UPDATE et portent le même garde de version (`WHERE EXISTS (SELECT 1 FROM issues WHERE id = ? AND row_version = ?)`, valeur d'avant l'UPDATE). Le batch étant une transaction, soit tout s'applique, soit l'ensemble devient un no-op traduit en 409 par un `RETURNING` vide. Le garde est évalué **avant** l'UPDATE et non après : viser `row_version + 1` aurait laissé passer le cas où une écriture concurrente a précisément amené la ligne à cette valeur.
+- **Commentaires, pièces jointes, actions correctives** : nouveau helper `insertHistoryEventForJustCreatedChildStatement`, qui construit le payload en SQL (`json_object` + `MAX(id)`) puisque l'id n'est pas connu avant l'exécution du batch. Sûr pour la même raison que le helper équivalent à la création d'un dossier.
+- **Liaisons** : le lien et ses **deux** événements d'historique dans une seule transaction — une liaison ne doit jamais apparaître dans l'historique d'un seul des deux dossiers.
+- **Caviardage** : toutes les écritures en base groupées, et **ordre inversé** — R2 d'abord, base ensuite. Un échec R2 laisse alors la base intacte ; un échec base laisse des fichiers supprimés mais des lignes non marquées, situation rejouable puisque `R2.delete` sur une clé absente est sans effet. L'ordre précédent produisait un dossier déclaré caviardé avec ses fichiers toujours présents.
+
+Tests : conflit 409 ne laisse ni événement d'historique ni impacts remplacés ; une modification réussie en écrit exactement un.
+
+#### 2. `OPS-03` — limitation de débit et journalisation
+
+- `worker/auth/rateLimit.ts` : middleware branché sur les 17 routes mutantes. Clé = identifiant interne, jamais l'IP (plusieurs employés d'une succursale partagent une sortie réseau) ni le courriel. Écritures 120/min, téléversements 20/min, conformément au contrat. Un binding absent laisse passer plutôt que de transformer une écriture légitime en 500.
+- Journalisation : une ligne JSON par requête avec `requestId`, méthode, **motif de route**, statut, durée, `userId` interne et code d'erreur métier. Le motif de route et non l'URL : celle-ci porte le numéro de dossier, et `q` contient du texte saisi.
+- Tests : 2 tests de quota (429 effectif, et le quota d'un utilisateur n'en pénalise pas un autre) et 4 tests de journalisation portant autant sur ce que la ligne contient que sur ce qu'elle ne doit **jamais** contenir (termes de recherche, courriel, description).
+
+#### 3. Routage et état d'URL
+
+`react-router` était une dépendance inutilisée et `src/routes/` un dossier vide. L'application a désormais de vraies URL : `/registre`, `/nouveau`, `/dossiers/:publicId`, `/analyse`, `/administration`.
+
+- Filtres du Registre **et** de l'Analyse dans l'URL (`useSearchParams`), avec `replace: true` pour ne pas empiler une entrée d'historique par frappe.
+- Navigation en `NavLink` : de vrais liens, ouvrables dans un onglet et partageables.
+- Le panneau de filtres s'ouvre d'emblée quand l'URL en porte — sinon un lien partagé masquerait ce qui filtre la liste.
+- Vérifié en navigateur : `/registre?status=new&priority=normal&q=palette` → ouverture d'un dossier → retour restitue l'URL et le champ de recherche à l'identique (**S39**).
+
+#### 4. Compléments de spécification
+
+- **Carte du Registre** : responsable (« Non assigné » quand il n'y en a pas) et échéance, avec mise en évidence du retard calculé sur la date métier.
+- **`waiting → inProgress`** : l'historique conserve désormais l'attente précédente (`previousWaitingOn`), comme l'exige `03_MATRICE_TRANSITIONS.md`. Les trois colonnes étant purgées, la raison de la stagnation d'un dossier disparaissait sans trace.
+- **Nom du fichier d'export CSV** daté sur la date métier, et `URL.revokeObjectURL` ajouté.
+
+#### 5. `V4-DRAFT-01` — machine d'état des brouillons
+
+**Défaut de fond découvert en implémentant** : les fichiers joints dans le formulaire Nouveau n'étaient **jamais envoyés au serveur**. Ils étaient stockés en brouillon puis effacés par `clearDraft()` à la création réussie. Un employé joignait une photo à sa déclaration, recevait un message de succès, et la photo n'existait nulle part.
+
+`draftStorage.ts` réécrit selon la machine d'état de la spécification :
+- `editing` → `pendingUpload` **avant le premier envoi** (S45), avec `issuePublicId` ;
+- l'écran Nouveau filtre strictement sur `state === "editing"` (S46, garde anti-doublon) ;
+- l'écran Détail reprend les fichiers du même `publicId` avec Réessayer / Retirer (S47) ;
+- fichiers conservés en `Blob` et non en base64 (V3-MOB-01), qui gonflait chaque photo d'un tiers ;
+- envois séquentiels : sur un lien mobile faible, plusieurs envois simultanés échouent ensemble.
+
+Vérifié en navigateur, cycle complet : envoi coupé → « 1 fichier n'a pas pu être envoyé » → écran Nouveau vierge (S46) → bandeau « Fichiers à compléter » dans le Détail (S47) → Réessayer → pièce jointe présente et bandeau disparu.
+
+#### 6. `V4-IMG-01` — réduction des images
+
+`imageOptimizer.ts` applique la règle V1 : plus grand côté ramené à 2048 px, export JPEG qualité 0,82 sauf transparence réellement utilisée (échantillonnage du canal alpha, pour ne pas refuser un PNG opaque), conservation de l'original s'il est plus léger, et taille finale affichée avant envoi. Une image non décodable (HEIC sur navigateur incapable) est conservée telle quelle : une optimisation impossible ne doit pas empêcher de joindre une photo. Aucun service tiers.
+
+**Mesuré en navigateur : photo 3000×2000 de 1,3 Mo réduite à 23 Ko**, envoyée et enregistrée (`size_bytes = 23594` en base).
+
+#### 7. Type de fichier vérifié sur les octets
+
+`worker/domain/fileSignature.ts` : le type annoncé doit correspondre aux octets d'en-tête. `File.type` vient du client — un exécutable renommé `photo.jpg` franchissait le contrôle précédent. Trois tests utilisaient des contenus factices et ont été corrigés avec de vraies signatures (`tests/api/support/fixtures.ts`), ce qui les rend au passage réalistes.
+
+#### 8. Couverture E2E et mobile
+
+Le parcours E2E n'était pas écrivable avant que l'identité de développement fonctionne. Ajouté :
+- 7 tests de parcours : redirection racine, navigation, filtres survivant à un **rechargement complet**, lien profond, aller-retour depuis un dossier, URL inconnue ;
+- 12 tests de débordement horizontal sur 4 écrans × 320/375/430 px (**S42**), exécutés sur chromium, mobile-chrome et mobile-safari.
+
+- **Commandes exécutées** :
+  - `npm run verify` → **exit 0**, **221 tests** (31 fichiers). 203 avant l'intervention.
+  - `npx playwright test` → **38 tests passés** sur les trois navigateurs configurés.
+  - Parcours navigateur manuel : déclaration avec photo, échec d'envoi simulé, reprise depuis le Détail.
+- **`npm run verify`** : **PASS** (exit 0).
+- **Staging testé** : non — `wrangler.jsonc` contient toujours `REPLACE_DEV_D1_ID` et `REPLACE_ME`.
+- **Limitations connues / dette** :
+  - **`S41` non satisfait pour un non-administrateur** : la navigation compte 3 destinations (Nouveau, Registre, Analyse) et 4 pour un administrateur, alors que `01_NAVIGATION_ET_ARBORESCENCE.md` décrit Accueil / Registre / Nouveau / Analyse avec Administration dans un menu utilisateur. Construire l'écran Accueil (cartes « Mes dossiers », « Urgents », « En attente », « Révisions dues ») est une **fonctionnalité à écrire**, pas un correctif : volontairement non entrepris ici.
+  - `/api/meta` ne publie pas d'annuaire : la carte du Registre affiche « Responsable #12 » faute de nom. Résolu soit par un champ `ownerDisplayName` au contrat, soit par un endpoint d'annuaire — décision de contrat, donc RFC.
+  - Le quota de pièces jointes reste vérifié puis inséré en deux temps : deux envois simultanés peuvent dépasser d'une unité la limite de 10.
+- **RFC ouverte** : non. Deux sujets en attente : le tri du Registre (`03_ECRAN_REGISTRE.md` en spécifie quatre, `GET /issues` n'a pas de paramètre `sort`) et le nom du responsable sur la carte.
+- **Prochain propriétaire** : humain, pour `OPS-01` / `OPS-02`.
+  - Toute la dette technique corrigeable sans accès Cloudflare est résorbée. Le prochain jalon est le provisionnement.
+
+---

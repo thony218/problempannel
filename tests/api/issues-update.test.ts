@@ -132,6 +132,110 @@ async function createIssue(overrides: Record<string, unknown> = {}) {
 }
 
 describe("PATCH /api/issues/:publicId", () => {
+
+  /**
+   * G-007 : la modification et sa trace d'audit sont une seule transaction.
+   *
+   * Sur un conflit de version, le batch doit être un no-op complet — ni
+   * événement d'historique, ni impacts remplacés pour une modification
+   * rejetée en 409. L'ancien découpage (UPDATE puis batch séparé) écrivait
+   * l'historique même quand il ne fallait pas, et inversement pouvait laisser
+   * un dossier modifié sans trace.
+   */
+  it("writes no history event when the update is rejected as a conflict", async () => {
+    const { publicId, etag } = await createIssue();
+
+    // Une première modification fait avancer row_version : l'ETag initial périme.
+    await patch(`/issues/${publicId}`, { priority: "important" }, { "If-Match": etag }, MANAGER_HEADER);
+
+    const issueId = Number(publicId.replace("INC-", ""));
+    const before = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM issue_history WHERE issue_id = ?"
+    ).bind(issueId).first<{ n: number }>();
+
+    const stale = await patch(
+      `/issues/${publicId}`,
+      { priority: "urgent", impacts: [{ impactTypeId: impactTimeLostId, details: "Remplacé" }] },
+      { "If-Match": etag },
+      MANAGER_HEADER
+    );
+    expect(stale.status).toBe(409);
+
+    const after = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM issue_history WHERE issue_id = ?"
+    ).bind(issueId).first<{ n: number }>();
+    expect(after!.n).toBe(before!.n);
+
+    // Les impacts de la requête rejetée n'ont pas été appliqués non plus.
+    const impact = await env.DB.prepare(
+      "SELECT details FROM issue_impacts WHERE issue_id = ?"
+    ).bind(issueId).first<{ details: string | null }>();
+    expect(impact!.details).toBeNull();
+  });
+
+  it("records exactly one history event for a successful update", async () => {
+    const { publicId, etag } = await createIssue();
+    const issueId = Number(publicId.replace("INC-", ""));
+
+    const before = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM issue_history WHERE issue_id = ?"
+    ).bind(issueId).first<{ n: number }>();
+
+    const res = await patch(`/issues/${publicId}`, { priority: "urgent" }, { "If-Match": etag }, MANAGER_HEADER);
+    expect(res.status).toBe(200);
+
+    const after = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM issue_history WHERE issue_id = ?"
+    ).bind(issueId).first<{ n: number }>();
+    expect(after!.n).toBe(before!.n + 1);
+  });
+
+  /**
+   * 01_produit/03_MATRICE_TRANSITIONS.md, `waiting → inProgress` :
+   * « champs waiting actifs mis à null; historique conserve l'attente
+   * précédente ». Sans cette trace, la raison de la stagnation d'un dossier
+   * disparaît avec la purge des colonnes.
+   */
+  it("keeps the previous waiting target in history when leaving 'waiting'", async () => {
+    const { publicId, etag } = await createIssue();
+
+    const waitingRes = await patch(
+      `/issues/${publicId}`,
+      {
+        status: "waiting",
+        subcategoryId,
+        ownerUserId: userId,
+        waitingOn: { type: "supplier", label: "Fournisseur Beta" },
+      },
+      { "If-Match": etag },
+      MANAGER_HEADER
+    );
+    expect(waitingRes.status).toBe(200);
+
+    const resumeRes = await patch(
+      `/issues/${publicId}`,
+      { status: "inProgress" },
+      { "If-Match": waitingRes.headers.get("ETag") as string },
+      MANAGER_HEADER
+    );
+    expect(resumeRes.status).toBe(200);
+    const resumed = (await resumeRes.json()) as any;
+    expect(resumed.data.issue.waitingOn).toBeNull();
+
+    const historyRes = await app.request(
+      `http://local/api/issues/${publicId}/history`,
+      { headers: MANAGER_HEADER },
+      env
+    );
+    const events = ((await historyRes.json()) as any).data.items;
+    const withPrevious = events.filter((e: any) => e.payload?.previousWaitingOn);
+    expect(withPrevious).toHaveLength(1);
+    expect(withPrevious[0].payload.previousWaitingOn).toMatchObject({
+      type: "supplier",
+      label: "Fournisseur Beta",
+    });
+  });
+
   it("rejects unauthenticated requests with 401", async () => {
     const res = await app.request(
       "http://local/api/issues/INC-000001",

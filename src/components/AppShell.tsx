@@ -1,15 +1,17 @@
 import React from "react";
+import { NavLink, Outlet } from "react-router";
 import { useAuth } from "../features/auth/AuthContext";
+import { PATHS } from "../routes/paths";
 
-export type NavTab = "new" | "list" | "analytics" | "admin";
-
-export interface AppShellProps {
-  currentTab: NavTab;
-  onTabChange: (tab: NavTab) => void;
-  children: React.ReactNode;
-}
-
-export function AppShell({ currentTab, onTabChange, children }: AppShellProps) {
+/**
+ * Coquille et navigation principale. Les destinations sont des liens réels
+ * (`NavLink`), pas des boutons pilotant un état local : un employé doit
+ * pouvoir ouvrir le Registre dans un onglet, revenir en arrière, ou partager
+ * l'URL d'un écran (01_produit/ux/01_NAVIGATION_ET_ARBORESCENCE.md).
+ *
+ * Le contenu de la route active est rendu par `<Outlet />`.
+ */
+export function AppShell() {
   const { user, loading, error, refresh } = useAuth();
 
   if (loading) {
@@ -65,6 +67,8 @@ export function AppShell({ currentTab, onTabChange, children }: AppShellProps) {
     );
   }
 
+  const navClass = ({ isActive }: { isActive: boolean }) => `nav-btn ${isActive ? "active" : ""}`;
+
   const roleLabel =
     user?.role === "admin" ? "Admin" : user?.role === "manager" ? "Gestionnaire" : "Employé";
 
@@ -86,44 +90,26 @@ export function AppShell({ currentTab, onTabChange, children }: AppShellProps) {
 
       <nav className="app-nav" aria-label="Navigation principale">
         <div className="nav-content">
-          <button
-            type="button"
-            className={`nav-btn ${currentTab === "new" ? "active" : ""}`}
-            onClick={() => onTabChange("new")}
-            data-testid="tab-new"
-          >
+          <NavLink to={PATHS.newIssue} className={navClass} data-testid="tab-new">
             ➕ Nouveau dossier
-          </button>
-          <button
-            type="button"
-            className={`nav-btn ${currentTab === "list" ? "active" : ""}`}
-            onClick={() => onTabChange("list")}
-            data-testid="tab-list"
-          >
+          </NavLink>
+          <NavLink to={PATHS.registry} className={navClass} data-testid="tab-list">
             📑 Registre
-          </button>
-          <button
-            type="button"
-            className={`nav-btn ${currentTab === "analytics" ? "active" : ""}`}
-            onClick={() => onTabChange("analytics")}
-            data-testid="tab-analytics"
-          >
+          </NavLink>
+          <NavLink to={PATHS.analytics} className={navClass} data-testid="tab-analytics">
             📊 Analyse
-          </button>
+          </NavLink>
           {user?.role === "admin" && (
-            <button
-              type="button"
-              className={`nav-btn ${currentTab === "admin" ? "active" : ""}`}
-              onClick={() => onTabChange("admin")}
-              data-testid="tab-admin"
-            >
+            <NavLink to={PATHS.admin} className={navClass} data-testid="tab-admin">
               ⚙️ Administration
-            </button>
+            </NavLink>
           )}
         </div>
       </nav>
 
-      <main className="main-content">{children}</main>
+      <main className="main-content">
+        <Outlet />
+      </main>
     </div>
   );
 }

@@ -8,21 +8,41 @@ import { HistoryTimelineSection } from "../history/HistoryTimelineSection";
 import { LinksSection } from "../links/LinksSection";
 import { EditIssueModal } from "./EditIssueModal";
 import { RedactModal } from "../admin/RedactModal";
+import { apiFetch } from "../../shared/apiClient";
+import { useNavigate, useParams } from "react-router";
+import { PATHS, issueDetailPath } from "../../routes/paths";
 
 export type IssueDetail = components["schemas"]["IssueDetail"];
 export type IssueStatus = components["schemas"]["IssueStatus"];
 export type Priority = components["schemas"]["Priority"];
 
-export interface IssueDetailViewProps {
-  publicId: string;
-  onBack: () => void;
-  onSelectIssue?: (publicId: string) => void;
-}
-
 type DetailTab = "details" | "comments" | "attachments" | "actions" | "links" | "history";
 
-export function IssueDetailView({ publicId, onBack, onSelectIssue }: IssueDetailViewProps) {
+/**
+ * Détail d'un dossier, adressé par son URL (`/dossiers/INC-000042`).
+ *
+ * L'identifiant vient de la route : l'URL est partageable et un lien profond
+ * ouvre directement le dossier après authentification
+ * (01_produit/ux/01_NAVIGATION_ET_ARBORESCENCE.md §Deep links).
+ */
+export function IssueDetailView() {
   const { user, meta } = useAuth();
+  const navigate = useNavigate();
+  const { publicId = "" } = useParams<{ publicId: string }>();
+
+  /**
+   * Retour au Registre en **restituant ses filtres** (S39).
+   *
+   * `navigate(-1)` rejoue l'entrée d'historique précédente, donc l'URL filtrée
+   * telle qu'elle était. Sur un lien profond ouvert directement — pas
+   * d'historique à remonter — on retombe sur le Registre non filtré.
+   */
+  const onBack = () => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate(PATHS.registry);
+  };
+
+  const onSelectIssue = (targetPublicId: string) => navigate(issueDetailPath(targetPublicId));
 
   const [detail, setDetail] = useState<IssueDetail | null>(null);
   const [etag, setEtag] = useState<string | null>(null);
@@ -37,7 +57,7 @@ export function IssueDetailView({ publicId, onBack, onSelectIssue }: IssueDetail
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(`/api/issues/${publicId}`, {
+      const res = await apiFetch(`/api/issues/${publicId}`, {
         headers: { Accept: "application/json" },
       });
 

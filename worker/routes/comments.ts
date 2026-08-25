@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../domain/types";
 import { requireUser } from "../auth/middleware";
+import { rateLimit } from "../auth/rateLimit";
 import { AppError, okBody } from "../domain/errors";
 
 import {
@@ -26,7 +27,7 @@ commentRoutes.get("/issues/:publicId/comments", requireUser, async (c) => {
   return c.json(okBody(result));
 });
 
-commentRoutes.post("/issues/:publicId/comments", requireUser, async (c) => {
+commentRoutes.post("/issues/:publicId/comments", requireUser, rateLimit("write"), async (c) => {
   const body = await c.req.json().catch(() => null);
   const parsed = createCommentSchema.safeParse(body);
   if (!parsed.success) {
@@ -47,7 +48,7 @@ commentRoutes.post("/issues/:publicId/comments", requireUser, async (c) => {
   return c.json(okBody(comment), 201);
 });
 
-commentRoutes.delete("/comments/:commentId", requireUser, async (c) => {
+commentRoutes.delete("/comments/:commentId", requireUser, rateLimit("write"), async (c) => {
   const commentId = Number(c.req.param("commentId"));
   if (!Number.isInteger(commentId) || commentId <= 0) {
     throw new AppError("NOT_FOUND", "Commentaire introuvable.");

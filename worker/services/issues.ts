@@ -17,14 +17,14 @@ import {
   mapIssueRow,
   queryIssuesList,
   replaceIssueImpactsStatements,
-  updateIssueRow,
+  updateIssueRowStatement,
   type ApiIssue,
   type IssueColumnUpdates,
   type IssueRow,
 } from "../db/issues";
 import { findImpactsByIssueId } from "../db/impacts";
 import { countOpenBlockingCorrectiveActions, findCorrectiveActionsByIssueId } from "../db/corrective-actions";
-import { insertHistoryEventStatement } from "../db/history";
+import { insertHistoryEventStatementIfVersion } from "../db/history";
 import { issueETag } from "../domain/etag";
 import { validateStatusTransition, type Role } from "../domain/transitions";
 import { validateIssueUpdatePermissions } from "../domain/permissions";
@@ -514,36 +514,74 @@ export async function updateIssue(
     }
   }
 
-  const updatedRow = await updateIssueRow(db, id, current.row_version, columns, {
-    touchResolvedAtNow,
-    clearResolvedAt,
-  });
-  if (!updatedRow) {
-    throw new AppError("CONFLICT", "Le dossier a été modifié entretemps.");
-  }
-
-  const followUpStatements = input.impacts
-    ? replaceIssueImpactsStatements(
-        db,
-        id,
-        input.impacts.map((impact) => ({ impactTypeId: impact.impactTypeId, details: impact.details ?? null }))
-      )
-    : [];
-
   const eventType = isReopening ? "issue_reopened" : "issue_updated";
   const historyPayload: Record<string, unknown> = { fields: Object.keys(input).sort() };
   if (isReopening && input.reopenReason) {
     historyPayload.reopenReason = input.reopenReason;
   }
 
-  followUpStatements.push(
-    insertHistoryEventStatement(db, id, {
-      actorUserId,
-      eventType,
-      payload: historyPayload,
+  // 01_produit/03_MATRICE_TRANSITIONS.md, `waiting → inProgress` :
+  // « l'historique conserve l'attente précédente ». Les trois colonnes
+  // d'attente sont purgées par cette écriture ; sans cette trace, on ne peut
+  // plus répondre après coup à « qui attendait-on, et pourquoi ce dossier
+  // a-t-il stagné ». Ce ne sont pas des valeurs libres au sens de
+  // 01_produit/09_CAVIARDAGE_ET_HISTORIQUE.md (dont la liste est close), et
+  // le libellé externe est précisément l'information à conserver.
+  const waitingCleared =
+    current.waiting_on_type !== null &&
+    columns.waiting_on_type !== undefined &&
+    columns.waiting_on_type !== current.waiting_on_type;
+  if (waitingCleared) {
+    historyPayload.previousWaitingOn = {
+      type: current.waiting_on_type,
+      userId: current.waiting_on_user_id,
+      label: current.waiting_on_label,
+    };
+  }
+
+  // Une seule transaction pour la modification et sa trace d'audit.
+  //
+  // Les écritures de suivi précèdent l'UPDATE et portent le même garde de
+  // version (`row_version = current.row_version`, la valeur d'avant). Un batch
+  // D1 étant une transaction, soit tout s'applique, soit le dossier n'a pas la
+  // version attendue et l'ensemble devient un no-op que le `RETURNING` vide
+  // permet de traduire en 409. L'ancien découpage — UPDATE d'abord, batch
+  // ensuite — pouvait laisser un dossier modifié sans événement d'historique
+  // en cas de panne entre les deux (`G-007`).
+  const statements: D1PreparedStatement[] = [];
+
+  if (input.impacts) {
+    statements.push(
+      ...replaceIssueImpactsStatements(
+        db,
+        id,
+        input.impacts.map((impact) => ({ impactTypeId: impact.impactTypeId, details: impact.details ?? null })),
+        current.row_version
+      )
+    );
+  }
+
+  statements.push(
+    insertHistoryEventStatementIfVersion(
+      db,
+      id,
+      { actorUserId, eventType, payload: historyPayload },
+      current.row_version
+    )
+  );
+
+  statements.push(
+    updateIssueRowStatement(db, id, current.row_version, columns, {
+      touchResolvedAtNow,
+      clearResolvedAt,
     })
   );
-  await db.batch(followUpStatements);
+
+  const results = await db.batch<IssueRow>(statements);
+  const updatedRow = results[results.length - 1]?.results?.[0];
+  if (!updatedRow) {
+    throw new AppError("CONFLICT", "Le dossier a été modifié entretemps.");
+  }
 
   return getIssueDetail(db, publicId);
 }

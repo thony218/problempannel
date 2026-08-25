@@ -6,14 +6,18 @@ import { findActiveUserById } from "../db/users";
 import {
   findCorrectiveActionById,
   findCorrectiveActionsByIssueId,
-  insertCorrectiveAction,
+  insertCorrectiveActionStatement,
   mapCorrectiveActionRow,
-  updateCorrectiveActionRow,
+  updateCorrectiveActionRowStatement,
   STATUS_API_TO_DB,
   type ApiCorrectiveAction,
   type CorrectiveActionColumnUpdates,
+  type CorrectiveActionRow,
 } from "../db/corrective-actions";
-import { insertHistoryEventStatement } from "../db/history";
+import {
+  insertHistoryEventForJustCreatedChildStatement,
+  insertHistoryEventStatement,
+} from "../db/history";
 import type { CreateCorrectiveActionInput, UpdateCorrectiveActionInput } from "../validation/corrective-actions";
 
 export type Role = components["schemas"]["Role"];
@@ -60,23 +64,29 @@ export async function createCorrectiveAction(
     });
   }
 
-  const inserted = await insertCorrectiveAction(db, {
-    issueId,
-    title: input.title.trim(),
-    description: input.description?.trim() || null,
-    ownerUserId: input.ownerUserId,
-    dueDate: input.dueDate,
-    status: STATUS_API_TO_DB[input.status],
-    blocksIssueClosure: input.blocksIssueClosure,
-  });
+  // Action et trace d'audit dans une seule transaction (G-007).
+  const results = await db.batch<CorrectiveActionRow>([
+    insertCorrectiveActionStatement(db, {
+      issueId,
+      title: input.title.trim(),
+      description: input.description?.trim() || null,
+      ownerUserId: input.ownerUserId,
+      dueDate: input.dueDate,
+      status: STATUS_API_TO_DB[input.status],
+      blocksIssueClosure: input.blocksIssueClosure,
+    }),
+    insertHistoryEventForJustCreatedChildStatement(
+      db,
+      issueId,
+      { actorUserId, eventType: "corrective_action_created", idPayloadKey: "actionId" },
+      "corrective_actions"
+    ),
+  ]);
 
-  // Consigner l'événement d'historique sur le dossier parent
-  await insertHistoryEventStatement(db, issueId, {
-    actorUserId,
-    eventType: "corrective_action_created",
-    payload: { actionId: inserted.id },
-  }).run();
-
+  const inserted = results[0]?.results?.[0];
+  if (!inserted) {
+    throw new Error("Échec de l'insertion de l'action corrective.");
+  }
   return mapCorrectiveActionRow(inserted);
 }
 
@@ -150,15 +160,20 @@ export async function updateCorrectiveAction(
   if (input.result !== undefined) updates.result = input.result?.trim() || null;
   if (input.effectivenessStatus !== undefined) updates.effectiveness_status = input.effectivenessStatus;
 
-  const updated = await updateCorrectiveActionRow(db, actionId, updates);
+  if (Object.keys(updates).length === 0) {
+    return mapCorrectiveActionRow(current);
+  }
+
+  const results = await db.batch<CorrectiveActionRow>([
+    updateCorrectiveActionRowStatement(db, actionId, updates),
+    insertHistoryEventStatement(db, current.issue_id, {
+      actorUserId,
+      eventType: "corrective_action_updated",
+      payload: { actionId },
+    }),
+  ]);
+
+  const updated = results[0]?.results?.[0];
   if (!updated) return null;
-
-  // Consigner l'événement d'historique sur le dossier parent
-  await insertHistoryEventStatement(db, current.issue_id, {
-    actorUserId,
-    eventType: "corrective_action_updated",
-    payload: { actionId },
-  }).run();
-
   return mapCorrectiveActionRow(updated);
 }

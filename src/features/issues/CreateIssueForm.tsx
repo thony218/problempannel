@@ -1,8 +1,18 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../auth/AuthContext";
 import type { components } from "../../shared/api-types.generated";
-import { loadDraft, saveDraft, clearDraft, type DraftAttachment } from "./draftStorage";
+import {
+  clearEditingDraft,
+  loadEditingDraft,
+  promoteToPendingUpload,
+  saveEditingDraft,
+  updatePendingFile,
+  type DraftFile,
+} from "./draftStorage";
+import { formatBytes, optimizeImage } from "./imageOptimizer";
 import { apiFetch } from "../../shared/apiClient";
+import { useNavigate } from "react-router";
+import { issueDetailPath } from "../../routes/paths";
 import { businessToday } from "../../shared/businessDate";
 
 export type Priority = components["schemas"]["Priority"];
@@ -27,7 +37,53 @@ export interface CreateIssueFormProps {
   onSuccess?: (createdIssue: components["schemas"]["Issue"]) => void;
 }
 
+/**
+ * Envoie les fichiers d'un brouillon `pendingUpload`, un par un.
+ *
+ * Séquentiel et non parallèle : sur un lien mobile faible, plusieurs envois
+ * simultanés se gênent et échouent ensemble. Chaque fichier réussi disparaît
+ * immédiatement du brouillon, si bien qu'une reprise ne renvoie que ce qui
+ * manque encore. Retourne le nombre d'échecs.
+ */
+async function uploadDraftFiles(publicId: string, files: DraftFile[]): Promise<number> {
+  let failures = 0;
+
+  for (const file of files) {
+    if (file.uploadState === "uploaded") continue;
+
+    try {
+      const formData = new FormData();
+      formData.append("file", new File([file.blob], file.name, { type: file.type }));
+
+      const res = await apiFetch(`/api/issues/${publicId}/attachments`, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (res.ok) {
+        await updatePendingFile(publicId, file.id, { uploadState: "uploaded" });
+      } else {
+        failures += 1;
+        const body = (await res.json().catch(() => null)) as any;
+        await updatePendingFile(publicId, file.id, {
+          uploadState: "failed",
+          lastError: body?.error?.message ?? `Échec du téléversement (${res.status}).`,
+        });
+      }
+    } catch (err: any) {
+      failures += 1;
+      await updatePendingFile(publicId, file.id, {
+        uploadState: "failed",
+        lastError: err?.message ?? "Erreur réseau.",
+      });
+    }
+  }
+
+  return failures;
+}
+
 export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
+  const navigate = useNavigate();
   const { user, meta } = useAuth();
 
   // `new Date().toISOString()` donne la date **UTC** : passé 19 h ou 20 h à
@@ -44,7 +100,8 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
   const [description, setDescription] = useState<string>("");
   const [priority, setPriority] = useState<Priority>("normal");
   const [selectedImpacts, setSelectedImpacts] = useState<Record<number, { selected: boolean; details: string }>>({});
-  const [attachments, setAttachments] = useState<DraftAttachment[]>([]);
+  const [attachments, setAttachments] = useState<DraftFile[]>([]);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
 
   const [draftRestored, setDraftRestored] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -56,7 +113,7 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
   // 1. Restaurer le brouillon IndexedDB au chargement
   useEffect(() => {
     let isMounted = true;
-    loadDraft().then((draft) => {
+    loadEditingDraft().then((draft) => {
       if (!isMounted || !draft) {
         if (user?.defaultLocationId && locationId === "") {
           setLocationId(user.defaultLocationId);
@@ -66,15 +123,16 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
         }
         return;
       }
-      if (draft.occurredOn) setOccurredOn(draft.occurredOn);
-      if (draft.locationId !== undefined) setLocationId(draft.locationId);
-      if (draft.departmentId !== undefined) setDepartmentId(draft.departmentId);
-      if (draft.categoryId !== undefined) setCategoryId(draft.categoryId);
-      if (draft.subcategoryId !== undefined) setSubcategoryId(draft.subcategoryId);
-      if (draft.description) setDescription(draft.description);
-      if (draft.priority) setPriority(draft.priority);
-      if (draft.selectedImpacts) setSelectedImpacts(draft.selectedImpacts);
-      if (draft.attachments) setAttachments(draft.attachments);
+      const { fields } = draft;
+      if (fields.occurredOn) setOccurredOn(fields.occurredOn);
+      if (fields.locationId !== undefined) setLocationId(fields.locationId);
+      if (fields.departmentId !== undefined) setDepartmentId(fields.departmentId);
+      if (fields.categoryId !== undefined) setCategoryId(fields.categoryId);
+      if (fields.subcategoryId !== undefined) setSubcategoryId(fields.subcategoryId);
+      if (fields.description) setDescription(fields.description);
+      if (fields.priority) setPriority(fields.priority);
+      if (fields.selectedImpacts) setSelectedImpacts(fields.selectedImpacts);
+      setAttachments(draft.files);
       setDraftRestored(true);
     });
 
@@ -92,18 +150,19 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
     if (createdIssue) return;
 
     const timer = setTimeout(() => {
-      saveDraft({
-        occurredOn,
-        locationId,
-        departmentId,
-        categoryId,
-        subcategoryId,
-        description,
-        priority,
-        selectedImpacts,
-        attachments,
-        updatedAt: Date.now(),
-      });
+      saveEditingDraft(
+        {
+          occurredOn,
+          locationId,
+          departmentId,
+          categoryId,
+          subcategoryId,
+          description,
+          priority,
+          selectedImpacts,
+        },
+        attachments
+      );
     }, 300);
 
     return () => clearTimeout(timer);
@@ -141,7 +200,7 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
     const files = e.target.files;
     if (!files || files.length === 0) return;
 
-    const newAttachments: DraftAttachment[] = [...attachments];
+    const newAttachments: DraftFile[] = [...attachments];
     const maxFiles = meta?.config.maxAttachmentsPerIssue ?? 10;
     const maxBytes = meta?.config.maxAttachmentBytes ?? 10485760;
 
@@ -154,27 +213,32 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
         break;
       }
 
-      const file = files[i];
+      // Réduction avant tout contrôle de taille (V4-IMG-01) : une photo de
+      // téléphone dépasse souvent 10 Mo à la prise de vue mais repasse
+      // largement sous la limite une fois ramenée à 2048 px.
+      const { file, optimized, originalBytes, finalBytes } = await optimizeImage(files[i]);
+
       if (file.size > maxBytes) {
         setErrors((prev) => ({
           ...prev,
-          attachments: `Le fichier "${file.name}" dépasse la taille maximale autorisée (10 Mo).`,
+          attachments: `Cette photo est trop volumineuse. Choisissez une photo plus petite ou réduisez sa taille.`,
         }));
         continue;
       }
 
-      const dataUrl = await new Promise<string>((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(file);
-      });
+      if (optimized) {
+        setUploadNotice(
+          `« ${files[i].name} » réduite de ${formatBytes(originalBytes)} à ${formatBytes(finalBytes)}.`
+        );
+      }
 
       newAttachments.push({
         id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
         name: file.name,
         type: file.type,
         size: file.size,
-        dataUrl,
+        blob: file,
+        uploadState: "pending",
       });
     }
 
@@ -187,7 +251,7 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
   };
 
   const handleClearDraft = async () => {
-    await clearDraft();
+    await clearEditingDraft();
     setDraftRestored(false);
     setDescription("");
     setCategoryId("");
@@ -290,12 +354,25 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
         return;
       }
 
-      // S24: création réussie -> suppression du brouillon
-      await clearDraft();
+      const created = data.data as components["schemas"]["Issue"];
 
-      setCreatedIssue(data.data);
-      if (onSuccess) {
-        onSuccess(data.data);
+      // S45 : la transition vers `pendingUpload` a lieu **avant** le premier
+      // envoi de fichier. Si le réseau tombe pendant les téléversements, le
+      // brouillon porte déjà le publicId et l'écran Détail proposera de
+      // reprendre — au lieu de perdre les photos avec un message de succès.
+      // Sans fichier, le brouillon est simplement supprimé (S24).
+      await promoteToPendingUpload(created.publicId, attachments);
+
+      setCreatedIssue(created);
+      if (onSuccess) onSuccess(created);
+
+      if (attachments.length > 0) {
+        const failed = await uploadDraftFiles(created.publicId, attachments);
+        setUploadNotice(
+          failed === 0
+            ? `${attachments.length} fichier(s) joint(s) au dossier.`
+            : `${failed} fichier(s) n'ont pas pu être envoyés. Reprenez-les depuis le dossier.`
+        );
       }
     } catch (err: any) {
       setErrors({ general: err.message || "Erreur réseau lors de l'enregistrement." });
@@ -329,8 +406,28 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
           Le dossier a été enregistré au statut <strong>Nouveau</strong>. Un gestionnaire pourra désormais procéder
           au triage et à l'assignation.
         </p>
+        {uploadNotice && (
+          <div
+            className="alert alert-success"
+            style={{ fontSize: "0.9rem" }}
+            data-testid="upload-result-notice"
+          >
+            {uploadNotice}
+          </div>
+        )}
         <div style={{ display: "flex", gap: "0.5rem", marginTop: "1rem", flexWrap: "wrap" }}>
-          <button type="button" className="btn btn-primary" onClick={resetForm} data-testid="btn-create-another">
+          {/* 01_produit/ux/01_NAVIGATION_ET_ARBORESCENCE.md : « Nouveau → Détail
+              après création réussie ». Le déclarant doit pouvoir enchaîner sur
+              son dossier, typiquement pour y joindre une photo. */}
+          <button
+            type="button"
+            className="btn btn-primary"
+            onClick={() => navigate(issueDetailPath(createdIssue.publicId))}
+            data-testid="btn-open-created-issue"
+          >
+            📄 Ouvrir le dossier
+          </button>
+          <button type="button" className="btn btn-secondary" onClick={resetForm} data-testid="btn-create-another">
             ➕ Déclarer un autre dossier
           </button>
         </div>
@@ -575,6 +672,15 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
           </label>
         </div>
         {errors.attachments && <div className="field-error">{errors.attachments}</div>}
+        {uploadNotice && (
+          <div
+            className="alert alert-success"
+            style={{ marginTop: "0.5rem", fontSize: "0.85rem", padding: "0.5rem 0.75rem" }}
+            data-testid="image-optimisation-notice"
+          >
+            {uploadNotice}
+          </div>
+        )}
 
         {attachments.length > 0 && (
           <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
@@ -592,7 +698,8 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
                   fontSize: "0.85rem",
                 }}
               >
-                <span>📄 {att.name} ({(att.size / 1024).toFixed(0)} Ko)</span>
+                {/* Taille **finale**, après réduction éventuelle (V4-IMG-01, règle 5). */}
+                <span>📄 {att.name} ({formatBytes(att.size)})</span>
                 <button
                   type="button"
                   onClick={() => handleRemoveAttachment(att.id)}

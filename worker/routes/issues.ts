@@ -4,6 +4,7 @@ import { AppError, okBody } from "../domain/errors";
 import { issueETag } from "../domain/etag";
 import { parsePublicId } from "../domain/publicId";
 import { requireUser } from "../auth/middleware";
+import { rateLimit } from "../auth/rateLimit";
 import { parseJsonBody, parseQueryParams } from "../validation/request";
 import { createIssueRequestSchema, listIssuesQuerySchema, updateIssueRequestSchema } from "../validation/issues";
 import { createIssue, getIssueDetail, listIssues, updateIssue } from "../services/issues";
@@ -26,7 +27,7 @@ issueRoutes.get("/issues/:publicId", requireUser, async (c) => {
   return c.json(okBody(detail), 200);
 });
 
-issueRoutes.patch("/issues/:publicId", requireUser, async (c) => {
+issueRoutes.patch("/issues/:publicId", requireUser, rateLimit("write"), async (c) => {
   const ifMatch = c.req.header("If-Match");
   if (!ifMatch) {
     throw new AppError("PRECONDITION_REQUIRED", "En-tête If-Match requis.");
@@ -50,7 +51,7 @@ issueRoutes.patch("/issues/:publicId", requireUser, async (c) => {
 });
 
 
-issueRoutes.post("/issues", requireUser, async (c) => {
+issueRoutes.post("/issues", requireUser, rateLimit("write"), async (c) => {
   const input = await parseJsonBody(c, createIssueRequestSchema);
   const issue = await createIssue(c.env.DB, c.get("user").id, input);
   c.header("ETag", issueETag(parsePublicId(issue.publicId) as number, issue.rowVersion));

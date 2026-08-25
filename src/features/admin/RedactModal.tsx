@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import type { components } from "../../shared/api-types.generated";
+import { apiFetch } from "../../shared/apiClient";
 
 export type ApiIssue = components["schemas"]["Issue"];
 
@@ -49,7 +50,7 @@ export function RedactModal({ issue, onClose, onSuccess }: RedactModalProps) {
     setError(null);
 
     try {
-      const res = await fetch(`/api/admin/issues/${issue.publicId}/redact`, {
+      const res = await apiFetch(`/api/admin/issues/${issue.publicId}/redact`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({

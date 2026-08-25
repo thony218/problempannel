@@ -2,6 +2,13 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../auth/AuthContext";
 import type { components } from "../../shared/api-types.generated";
 import { apiFetch } from "../../shared/apiClient";
+import {
+  loadPendingUpload,
+  removePendingFile,
+  updatePendingFile,
+  type DraftFile,
+} from "../issues/draftStorage";
+import { formatBytes } from "../issues/imageOptimizer";
 
 export type ApiAttachment = components["schemas"]["Attachment"];
 
@@ -31,6 +38,57 @@ export function AttachmentsSection({ publicId }: AttachmentsSectionProps) {
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  // S47 : fichiers restés en attente d'envoi après la création du dossier.
+  const [pendingFiles, setPendingFiles] = useState<DraftFile[]>([]);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
+
+  const refreshPending = useCallback(async () => {
+    const draft = await loadPendingUpload(publicId);
+    setPendingFiles(draft?.files ?? []);
+  }, [publicId]);
+
+  useEffect(() => {
+    refreshPending();
+  }, [refreshPending]);
+
+  /**
+   * Reprend l'envoi d'un fichier laissé en attente. Le brouillon est la source
+   * de vérité : un envoi réussi en retire le fichier, et l'enregistrement
+   * disparaît de lui-même quand il ne reste plus rien.
+   */
+  const handleRetryPending = async (file: DraftFile) => {
+    setRetryingId(file.id);
+    try {
+      const formData = new FormData();
+      formData.append("file", new File([file.blob], file.name, { type: file.type }));
+      const res = await apiFetch(`/api/issues/${publicId}/attachments`, { method: "POST", body: formData });
+
+      if (res.ok) {
+        await updatePendingFile(publicId, file.id, { uploadState: "uploaded" });
+        await fetchAttachments();
+      } else {
+        const body = (await res.json().catch(() => null)) as any;
+        await updatePendingFile(publicId, file.id, {
+          uploadState: "failed",
+          lastError: body?.error?.message ?? `Échec du téléversement (${res.status}).`,
+        });
+      }
+    } catch (err: any) {
+      await updatePendingFile(publicId, file.id, {
+        uploadState: "failed",
+        lastError: err?.message ?? "Erreur réseau.",
+      });
+    } finally {
+      setRetryingId(null);
+      await refreshPending();
+    }
+  };
+
+  const handleDiscardPending = async (fileId: string) => {
+    await removePendingFile(publicId, fileId);
+    await refreshPending();
+  };
 
   const fetchAttachments = useCallback(async () => {
     try {
@@ -150,6 +208,53 @@ export function AttachmentsSection({ publicId }: AttachmentsSectionProps) {
       </h2>
 
       {error && <div className="alert alert-danger">{error}</div>}
+
+      {/* S47 : « Détail reprend les pendingUpload du même publicId ». Ces
+          fichiers ont été choisis à la déclaration mais n'ont pas pu partir —
+          sans ce bandeau, ils resteraient invisibles dans IndexedDB. */}
+      {pendingFiles.length > 0 && (
+        <div className="alert alert-warning" data-testid="pending-uploads" style={{ marginBottom: "1rem" }}>
+          <strong>Fichiers à compléter ({pendingFiles.length})</strong>
+          <p style={{ margin: "0.25rem 0 0.75rem", fontSize: "0.85rem" }}>
+            Ces fichiers ont été choisis lors de la déclaration mais n'ont pas encore été envoyés.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {pendingFiles.map((file) => (
+              <div
+                key={file.id}
+                data-testid={`pending-file-${file.id}`}
+                style={{ display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap", fontSize: "0.85rem" }}
+              >
+                <span style={{ flex: 1, minWidth: "10rem" }}>
+                  📄 {file.name} ({formatBytes(file.size)})
+                  {file.lastError && (
+                    <span style={{ color: "var(--color-danger)", display: "block" }}>{file.lastError}</span>
+                  )}
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  style={{ padding: "0.25rem 0.6rem", minHeight: "auto", fontSize: "0.8rem" }}
+                  disabled={retryingId === file.id}
+                  onClick={() => handleRetryPending(file)}
+                  data-testid={`btn-retry-${file.id}`}
+                >
+                  {retryingId === file.id ? "Envoi…" : "🔄 Réessayer"}
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ padding: "0.25rem 0.6rem", minHeight: "auto", fontSize: "0.8rem" }}
+                  onClick={() => handleDiscardPending(file.id)}
+                  data-testid={`btn-discard-${file.id}`}
+                >
+                  Retirer
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {loading ? (
         <div style={{ padding: "1rem 0", color: "var(--color-text-muted)" }}>Chargement des pièces jointes...</div>

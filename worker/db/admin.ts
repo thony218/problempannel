@@ -68,6 +68,22 @@ export async function insertUser(
   return result;
 }
 
+/**
+ * Nombre d'administrateurs actifs **autres** que `excludingUserId`.
+ * Sert à refuser une modification qui retirerait le dernier accès admin.
+ */
+export async function countOtherActiveAdmins(db: D1Database, excludingUserId: number): Promise<number> {
+  const row = await db
+    .prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND active = 1 AND id != ?")
+    .bind(excludingUserId)
+    .first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+export async function findUserRowById(db: D1Database, userId: number): Promise<UserRow | null> {
+  return db.prepare("SELECT * FROM users WHERE id = ?").bind(userId).first<UserRow>();
+}
+
 export async function updateUser(
   db: D1Database,
   userId: number,

@@ -106,6 +106,39 @@ describe("ANA-01..04: Endpoints Analytique et Récurrence", () => {
     expect(body.data.averageResolutionHours).toBe(2);
   });
 
+/**
+   * Régression : « Dossier en retard » se calcule sur la date **métier**
+   * (01_produit/08_DEFINITIONS_ANALYTIQUES.md), pas sur `date('now')` en UTC.
+   *
+   * Le cas discriminant est un dossier dû **aujourd'hui** : il n'est pas en
+   * retard. Passé 19 h ou 20 h à Montréal, l'UTC est déjà au lendemain et un
+   * calcul en UTC le déclarerait en retard — `/api/issues?overdue=true` et
+   * `/api/analytics/summary` donneraient alors deux réponses contradictoires
+   * sur le même dossier au même instant.
+   */
+  it("agrees with GET /issues?overdue=true on a file due today", async () => {
+    const businessToday = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "America/Toronto",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).format(new Date());
+
+    await env.DB.prepare(
+      `INSERT INTO issues (occurred_on, location_id, category_id, description, priority, status, due_date, created_by_user_id)
+       VALUES ('2026-08-20', ?, ?, 'Dossier dû aujourd hui', 'normal', 'new', ?, ?)`
+    ).bind(locationMtlId, categoryId, businessToday, employeeId).run();
+
+    const listRes = await app.request("http://local/api/issues?overdue=true", { headers: EMPLOYEE_HEADER }, env);
+    const listBody = (await listRes.json()) as any;
+
+    const summaryRes = await app.request("http://local/api/analytics/summary", { headers: EMPLOYEE_HEADER }, env);
+    const summaryBody = (await summaryRes.json()) as any;
+
+    expect(summaryBody.data.overdue).toBe(listBody.data.items.length);
+    expect(summaryBody.data.overdue).toBe(0);
+  });
+
   it("detects local vs organizational recurrence groups with 3/90 threshold (ANA-03)", async () => {
     // Créer 3 dossiers dans location MTL pour subcategory1Id -> déclenche récurrence locale & organisationnelle
     for (let i = 1; i <= 3; i++) {

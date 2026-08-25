@@ -8,6 +8,7 @@ import {
   getEffectivenessMetrics,
   getRecurringIssues,
 } from "../services/analytics";
+import { appConfigFromEnv } from "../domain/config";
 
 const summaryQuerySchema = z.object({
   dateFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -36,7 +37,7 @@ analyticsRoutes.get("/analytics/summary", requireUser, async (c) => {
     throw new AppError("VALIDATION_ERROR", "Paramètres de requête invalides.");
   }
 
-  const summary = await getAnalyticsSummary(c.env.DB, queryResult.data);
+  const summary = await getAnalyticsSummary(c.env.DB, queryResult.data, appConfigFromEnv(c.env));
   return c.json(okBody(summary));
 });
 
@@ -46,13 +47,10 @@ analyticsRoutes.get("/analytics/recurring", requireUser, async (c) => {
     throw new AppError("VALIDATION_ERROR", "Paramètres de requête invalides.");
   }
 
-  const windowDays = Number(c.env.RECURRING_WINDOW_DAYS || 90);
-  const minCount = Number(c.env.RECURRING_MIN_COUNT || 3);
-
-  const groups = await getRecurringIssues(c.env.DB, queryResult.data, {
-    windowDays,
-    minCount,
-  });
+  // Seuils et fuseau lus via `appConfigFromEnv`, comme partout ailleurs :
+  // une variable absente ou non numérique retombe sur une valeur sûre plutôt
+  // que sur NaN.
+  const groups = await getRecurringIssues(c.env.DB, queryResult.data, appConfigFromEnv(c.env));
 
   return c.json(okBody(groups));
 });

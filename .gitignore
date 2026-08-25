@@ -1,5 +1,9 @@
 node_modules/
 dist/
+
+# Sorties Playwright
+test-results/
+playwright-report/
 .wrangler/
 .tmp/
 .dev.vars

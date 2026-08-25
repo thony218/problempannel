@@ -1,6 +1,6 @@
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { renderToStaticMarkup } from "react-dom/server";
+import { renderLayout } from "./support/render";
 import { AppShell } from "../../src/components/AppShell";
 import * as authModule from "../../src/features/auth/AuthContext";
 import type { AuthContextValue } from "../../src/features/auth/AuthContext";
@@ -30,12 +30,13 @@ function mockAuth(value: Partial<AuthContextValue>): void {
   });
 }
 
-function renderShell(currentTab: "new" | "list" = "new"): string {
-  return renderToStaticMarkup(
-    <AppShell currentTab={currentTab} onTabChange={() => {}}>
-      <div data-testid="child-content">Contenu enfant</div>
-    </AppShell>
-  );
+/**
+ * `AppShell` est une route de mise en page : elle rend l'onglet actif d'après
+ * l'URL et le contenu via `<Outlet />`. Le test fournit donc une URL, pas un
+ * onglet.
+ */
+function renderShell(path = "/nouveau"): string {
+  return renderLayout(<AppShell />, <div data-testid="child-content">Contenu enfant</div>, path);
 }
 
 afterEach(() => {
@@ -94,7 +95,7 @@ describe("AppShell — états de session (META-02)", () => {
         defaultDepartmentId: null,
       },
     });
-    const html = renderShell("list");
+    const html = renderShell("/registre");
 
     expect(html).toContain("Registre des erreurs");
     expect(html).toContain("Jean Dupont");
@@ -119,11 +120,20 @@ describe("AppShell — états de session (META-02)", () => {
       },
     });
 
-    const onNewTab = renderShell("new");
-    const onListTab = renderShell("list");
+    const onNewTab = renderShell("/nouveau");
+    const onListTab = renderShell("/registre");
 
-    expect(onNewTab).toMatch(/class="nav-btn active"[^>]*data-testid="tab-new"/);
-    expect(onListTab).toMatch(/class="nav-btn active"[^>]*data-testid="tab-list"/);
+    // NavLink pose la classe active et `aria-current` d'après l'URL courante,
+    // et rend un vrai lien : la destination s'ouvre dans un nouvel onglet, se
+    // copie, se partage — ce qu'un bouton ne permettait pas.
+    const activeLink = (html: string) => html.match(/<a[^>]*class="nav-btn active"[^>]*>/)?.[0] ?? "";
+
+    expect(activeLink(onNewTab)).toContain('data-testid="tab-new"');
+    expect(activeLink(onNewTab)).toContain('href="/nouveau"');
+    expect(activeLink(onNewTab)).toContain('aria-current="page"');
+
+    expect(activeLink(onListTab)).toContain('data-testid="tab-list"');
+    expect(activeLink(onListTab)).toContain('href="/registre"');
     expect(onNewTab).toContain("Employé");
   });
 });

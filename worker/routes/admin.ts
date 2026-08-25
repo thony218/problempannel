@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../domain/types";
 import { requireUser } from "../auth/middleware";
+import { rateLimit } from "../auth/rateLimit";
 import { AppError, okBody } from "../domain/errors";
 import {
   adminCreateReference,
@@ -84,7 +85,7 @@ adminRoutes.get("/admin/users", requireUser, async (c) => {
   return c.json(okBody(users));
 });
 
-adminRoutes.post("/admin/users", requireUser, async (c) => {
+adminRoutes.post("/admin/users", requireUser, rateLimit("write"), async (c) => {
   const user = c.get("user");
   const body = await c.req.json().catch(() => null);
   const parsed = createUserSchema.safeParse(body);
@@ -101,7 +102,7 @@ adminRoutes.post("/admin/users", requireUser, async (c) => {
   return c.json(okBody(created), 201);
 });
 
-adminRoutes.patch("/admin/users/:userId", requireUser, async (c) => {
+adminRoutes.patch("/admin/users/:userId", requireUser, rateLimit("write"), async (c) => {
   const user = c.get("user");
   const userId = Number(c.req.param("userId"));
   if (isNaN(userId) || userId < 1) {
@@ -130,7 +131,7 @@ adminRoutes.patch("/admin/users/:userId", requireUser, async (c) => {
 // Caviardage
 // ----------------------------------------------------
 
-adminRoutes.post("/admin/issues/:publicId/redact", requireUser, async (c) => {
+adminRoutes.post("/admin/issues/:publicId/redact", requireUser, rateLimit("write"), async (c) => {
   const user = c.get("user");
   const body = await c.req.json().catch(() => null);
   const parsed = redactIssueSchema.safeParse(body);
@@ -169,7 +170,7 @@ const setupSimpleRefRoutes = (path: "locations" | "departments" | "categories" |
     return c.json(okBody(items));
   });
 
-  adminRoutes.post(`/admin/${path}`, requireUser, async (c) => {
+  adminRoutes.post(`/admin/${path}`, requireUser, rateLimit("write"), async (c) => {
     const user = c.get("user");
     const body = await c.req.json().catch(() => null);
     const parsed = createSimpleRefSchema.safeParse(body);
@@ -186,7 +187,7 @@ const setupSimpleRefRoutes = (path: "locations" | "departments" | "categories" |
     return c.json(okBody(created), 201);
   });
 
-  adminRoutes.patch(`/admin/${path}/:resourceId`, requireUser, async (c) => {
+  adminRoutes.patch(`/admin/${path}/:resourceId`, requireUser, rateLimit("write"), async (c) => {
     const user = c.get("user");
     const id = Number(c.req.param("resourceId"));
     if (isNaN(id) || id < 1) throw new AppError("NOT_FOUND", "Élément introuvable.");
@@ -220,7 +221,7 @@ adminRoutes.get("/admin/subcategories", requireUser, async (c) => {
   return c.json(okBody(items));
 });
 
-adminRoutes.post("/admin/subcategories", requireUser, async (c) => {
+adminRoutes.post("/admin/subcategories", requireUser, rateLimit("write"), async (c) => {
   const user = c.get("user");
   const body = await c.req.json().catch(() => null);
   const parsed = createSubcategorySchema.safeParse(body);
@@ -237,7 +238,7 @@ adminRoutes.post("/admin/subcategories", requireUser, async (c) => {
   return c.json(okBody(created), 201);
 });
 
-adminRoutes.patch("/admin/subcategories/:resourceId", requireUser, async (c) => {
+adminRoutes.patch("/admin/subcategories/:resourceId", requireUser, rateLimit("write"), async (c) => {
   const user = c.get("user");
   const id = Number(c.req.param("resourceId"));
   if (isNaN(id) || id < 1) throw new AppError("NOT_FOUND", "Sous-catégorie introuvable.");

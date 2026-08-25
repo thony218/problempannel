@@ -53,6 +53,39 @@ export function insertHistoryEventStatement(db: D1Database, issueId: number, eve
 }
 
 /**
+ * Variante conditionnelle de `insertHistoryEventStatement`, à placer dans le
+ * même `db.batch()` qu'un UPDATE optimiste — **avant** lui.
+ *
+ * Un batch D1 est une transaction : en évaluant `row_version = expectedRowVersion`
+ * (la version d'avant l'UPDATE), l'insertion ne s'applique que si l'UPDATE qui
+ * suit va lui aussi trouver sa ligne. Si une écriture concurrente a fait
+ * avancer la version entre la lecture du `If-Match` et le batch, les deux
+ * statements deviennent des no-op ensemble : pas d'événement d'historique
+ * orphelin décrivant une modification qui n'a pas eu lieu (`G-007`).
+ */
+export function insertHistoryEventStatementIfVersion(
+  db: D1Database,
+  issueId: number,
+  event: NewHistoryEvent,
+  expectedRowVersion: number
+) {
+  return db
+    .prepare(
+      `INSERT INTO issue_history (issue_id, actor_user_id, event_type, payload_json)
+       SELECT ?, ?, ?, ?
+       WHERE EXISTS (SELECT 1 FROM issues WHERE id = ? AND row_version = ?)`
+    )
+    .bind(
+      issueId,
+      event.actorUserId,
+      event.eventType,
+      JSON.stringify(event.payload ?? {}),
+      issueId,
+      expectedRowVersion
+    );
+}
+
+/**
  * À utiliser uniquement dans le même db.batch() que la création du
  * dossier, où l'id n'est pas encore connu côté application (RETURNING
  * n'est lu qu'après l'exécution complète du batch). Sûr car un batch D1
@@ -68,6 +101,35 @@ export function insertHistoryEventForJustCreatedIssueStatement(db: D1Database, e
        SELECT id, ?, ?, ? FROM issues ORDER BY id DESC LIMIT 1`
     )
     .bind(event.actorUserId, event.eventType, JSON.stringify(event.payload ?? {}));
+}
+
+/** Tables dont la création est journalisée en référençant l'id fraîchement inséré. */
+export type AuditableChildTable = "comments" | "attachments" | "corrective_actions";
+
+/**
+ * Événement d'historique décrivant une ligne **créée dans le même batch**,
+ * dont l'id n'est donc pas encore connu côté application.
+ *
+ * Le payload est construit en SQL (`json_object`) autour d'une sous-requête
+ * `MAX(id)`. C'est sûr pour la même raison que
+ * `insertHistoryEventForJustCreatedIssueStatement` : un batch D1 est une
+ * transaction, aucune autre écriture ne peut s'intercaler, donc « la ligne
+ * d'id le plus élevé pour ce dossier » désigne forcément celle qu'on vient
+ * d'insérer. `table` est une union fermée : aucune valeur externe n'atteint
+ * la requête.
+ */
+export function insertHistoryEventForJustCreatedChildStatement(
+  db: D1Database,
+  issueId: number,
+  event: { actorUserId: number; eventType: string; idPayloadKey: string },
+  table: AuditableChildTable
+) {
+  return db
+    .prepare(
+      `INSERT INTO issue_history (issue_id, actor_user_id, event_type, payload_json)
+       SELECT ?, ?, ?, json_object(?, (SELECT MAX(id) FROM ${table} WHERE issue_id = ?))`
+    )
+    .bind(issueId, event.actorUserId, event.eventType, event.idPayloadKey, issueId);
 }
 
 export async function findHistoryByIssueId(

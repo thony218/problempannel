@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../domain/types";
 import { requireUser } from "../auth/middleware";
+import { rateLimit } from "../auth/rateLimit";
 import { AppError, okBody } from "../domain/errors";
 import { appConfigFromEnv } from "../domain/config";
 
@@ -50,7 +51,7 @@ attachmentRoutes.get("/issues/:publicId/attachments", requireUser, async (c) => 
   return c.json(okBody(items));
 });
 
-attachmentRoutes.post("/issues/:publicId/attachments", requireUser, async (c) => {
+attachmentRoutes.post("/issues/:publicId/attachments", requireUser, rateLimit("upload"), async (c) => {
   let formData: FormData;
   try {
     formData = await c.req.formData();
@@ -101,7 +102,7 @@ attachmentRoutes.get("/attachments/:attachmentId", requireUser, async (c) => {
   });
 });
 
-attachmentRoutes.delete("/attachments/:attachmentId", requireUser, async (c) => {
+attachmentRoutes.delete("/attachments/:attachmentId", requireUser, rateLimit("write"), async (c) => {
   const attachmentId = Number(c.req.param("attachmentId"));
   if (!Number.isInteger(attachmentId) || attachmentId <= 0) {
     throw new AppError("NOT_FOUND", "Pièce jointe introuvable.");

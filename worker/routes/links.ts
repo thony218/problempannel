@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import type { AppEnv } from "../domain/types";
 import { requireUser } from "../auth/middleware";
+import { rateLimit } from "../auth/rateLimit";
 import { AppError, okBody } from "../domain/errors";
 import { createLink, listLinks, removeLink } from "../services/links";
 
@@ -19,7 +20,7 @@ linkRoutes.get("/issues/:publicId/links", requireUser, async (c) => {
   return c.json(okBody(items));
 });
 
-linkRoutes.post("/issues/:publicId/links", requireUser, async (c) => {
+linkRoutes.post("/issues/:publicId/links", requireUser, rateLimit("write"), async (c) => {
   const body = await c.req.json().catch(() => null);
   const parsed = createLinkSchema.safeParse(body);
   if (!parsed.success) {
@@ -47,7 +48,7 @@ linkRoutes.post("/issues/:publicId/links", requireUser, async (c) => {
   return c.json(okBody(link), 201);
 });
 
-linkRoutes.delete("/issues/:publicId/links/:relatedPublicId", requireUser, async (c) => {
+linkRoutes.delete("/issues/:publicId/links/:relatedPublicId", requireUser, rateLimit("write"), async (c) => {
   const user = c.get("user");
   const removed = await removeLink(
     c.env.DB,

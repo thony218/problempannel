@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import type { AppEnv } from "../domain/types";
 import { requireUser } from "../auth/middleware";
+import { rateLimit } from "../auth/rateLimit";
 import { AppError, okBody } from "../domain/errors";
 
 import {
@@ -24,7 +25,7 @@ correctiveActionRoutes.get("/issues/:publicId/corrective-actions", requireUser, 
   return c.json(okBody(items));
 });
 
-correctiveActionRoutes.post("/issues/:publicId/corrective-actions", requireUser, async (c) => {
+correctiveActionRoutes.post("/issues/:publicId/corrective-actions", requireUser, rateLimit("write"), async (c) => {
   const body = await c.req.json().catch(() => null);
   const parsed = createCorrectiveActionSchema.safeParse(body);
   if (!parsed.success) {
@@ -66,7 +67,7 @@ correctiveActionRoutes.get("/corrective-actions/:actionId", requireUser, async (
   return c.json(okBody(action));
 });
 
-correctiveActionRoutes.patch("/corrective-actions/:actionId", requireUser, async (c) => {
+correctiveActionRoutes.patch("/corrective-actions/:actionId", requireUser, rateLimit("write"), async (c) => {
   const actionId = Number(c.req.param("actionId"));
   if (!Number.isInteger(actionId) || actionId <= 0) {
     throw new AppError("NOT_FOUND", "Action corrective introuvable.");

@@ -1,6 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { app } from "../../worker/index";
+import { jpegFile } from "./support/fixtures";
 
 const EMPLOYEE_HEADER = { "X-Dev-User-Email": "emp@example.test" };
 const MANAGER_HEADER = { "X-Dev-User-Email": "manager@example.test" };
@@ -167,7 +168,7 @@ describe("ATT-01 & ATT-02: Upload et gestion des pièces jointes R2 (S17-S22)", 
     }
 
     const formData = new FormData();
-    const file = new File(["123"], "img_11.jpg", { type: "image/jpeg" });
+    const file = jpegFile("img_11.jpg");
     formData.append("file", file);
 
     const uploadRes = await app.request(
@@ -260,5 +261,49 @@ describe("ATT-01 & ATT-02: Upload et gestion des pièces jointes R2 (S17-S22)", 
     // Nom UTF-8 percent-encodé : les accents survivent au transport.
     expect(disposition).toContain("filename*=UTF-8''");
     expect(disposition).toContain(encodeURIComponent("reçu"));
+  });
+/**
+   * `File.type` est renseigné par le client. Un exécutable renommé `photo.jpg`
+   * et annoncé `image/jpeg` franchissait le contrôle de type sans difficulté :
+   * seule la lecture des octets d'en-tête permet au serveur de trancher.
+   */
+  it("rejects a file whose bytes do not match the declared type (415)", async () => {
+    const { publicId } = await createIssue();
+
+    const formData = new FormData();
+    // Signature d'un exécutable Windows (MZ), présenté comme une photo.
+    const disguised = new Uint8Array([0x4d, 0x5a, 0x90, 0x00, 0x03, 0x00, 0x00, 0x00]);
+    formData.append("file", new File([disguised], "photo.jpg", { type: "image/jpeg" }));
+
+    const res = await app.request(
+      `http://local/api/issues/${publicId}/attachments`,
+      { method: "POST", headers: EMPLOYEE_HEADER, body: formData },
+      env
+    );
+
+    expect(res.status).toBe(415);
+    const body = (await res.json()) as any;
+    expect(body.error.code).toBe("UNSUPPORTED_FILE_TYPE");
+    expect(body.error.message).toContain("ne correspond pas");
+
+    // Rien n'a été écrit : ni ligne en base, ni objet dans le bucket.
+    const rows = await env.DB.prepare("SELECT COUNT(*) AS n FROM attachments").first<{ n: number }>();
+    expect(rows!.n).toBe(0);
+  });
+
+  it("accepts a genuine PDF", async () => {
+    const { publicId } = await createIssue();
+
+    const formData = new FormData();
+    const pdf = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d, 0x31, 0x2e, 0x34]); // %PDF-1.4
+    formData.append("file", new File([pdf], "facture.pdf", { type: "application/pdf" }));
+
+    const res = await app.request(
+      `http://local/api/issues/${publicId}/attachments`,
+      { method: "POST", headers: EMPLOYEE_HEADER, body: formData },
+      env
+    );
+
+    expect(res.status).toBe(201);
   });
 });

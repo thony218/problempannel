@@ -74,31 +74,27 @@ export async function findCommentById(db: D1Database, id: number): Promise<Comme
   return result || null;
 }
 
-export async function insertComment(
+/** Statement d'insertion, à grouper avec son événement d'historique (G-007). */
+export function insertCommentStatement(
   db: D1Database,
   data: { issueId: number; userId: number; body: string }
-): Promise<CommentRow> {
-  const result = await db
+): D1PreparedStatement {
+  return db
     .prepare(
       `INSERT INTO comments (issue_id, user_id, body)
        VALUES (?, ?, ?)
        RETURNING id, issue_id, user_id, body, created_at, deleted_at, deleted_by_user_id, delete_reason,
                  redacted_at, redacted_by_user_id, redaction_reason`
     )
-    .bind(data.issueId, data.userId, data.body)
-    .first<CommentRow>();
-
-  if (!result) {
-    throw new Error("Échec de l'insertion du commentaire.");
-  }
-  return result;
+    .bind(data.issueId, data.userId, data.body);
 }
 
-export async function softDeleteComment(
+/** Statement de soft-delete, à grouper avec son événement d'historique (G-007). */
+export function softDeleteCommentStatement(
   db: D1Database,
   data: { commentId: number; deletedByUserId: number; deleteReason: string }
-): Promise<void> {
-  await db
+): D1PreparedStatement {
+  return db
     .prepare(
       `UPDATE comments
        SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
@@ -106,6 +102,5 @@ export async function softDeleteComment(
            delete_reason = ?
        WHERE id = ?`
     )
-    .bind(data.deletedByUserId, data.deleteReason, data.commentId)
-    .run();
+    .bind(data.deletedByUserId, data.deleteReason, data.commentId);
 }

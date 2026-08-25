@@ -13,9 +13,23 @@ export interface AnalyticsFilterParams {
   categoryId?: number;
 }
 
+/**
+ * Date métier courante (AAAA-MM-JJ), fournie par l'appelant.
+ *
+ * `date('now')` renvoie la date **UTC**. 01_produit/08_DEFINITIONS_ANALYTIQUES.md
+ * définit « Dossier en retard » par rapport à la *date métier courante*, et
+ * `queryIssuesList` applique déjà cette règle : s'en écarter ici ferait
+ * répondre `/api/issues?overdue=true` et `/api/analytics/summary`
+ * différemment sur le même dossier pendant les quatre à cinq heures qui
+ * séparent le soir montréalais du lendemain UTC.
+ */
+export interface BusinessDateParam {
+  businessToday: string;
+}
+
 export async function fetchAnalyticsSummary(
   db: D1Database,
-  filters: AnalyticsFilterParams
+  filters: AnalyticsFilterParams & BusinessDateParam
 ): Promise<ApiAnalyticsSummary> {
   const whereClauses: string[] = [];
   const binds: (number | string)[] = [];
@@ -47,7 +61,7 @@ export async function fetchAnalyticsSummary(
     SELECT
       COUNT(CASE WHEN status != 'resolved' THEN 1 END) as open_count,
       COUNT(CASE WHEN status != 'resolved' AND priority = 'urgent' THEN 1 END) as urgent_count,
-      COUNT(CASE WHEN status != 'resolved' AND due_date IS NOT NULL AND due_date < date('now') THEN 1 END) as overdue_count,
+      COUNT(CASE WHEN status != 'resolved' AND due_date IS NOT NULL AND date(due_date) < date(?) THEN 1 END) as overdue_count,
       COUNT(CASE WHEN status = 'waiting' THEN 1 END) as waiting_count,
       COUNT(CASE WHEN status = 'resolved' THEN 1 END) as resolved_count,
       COUNT(CASE WHEN status = 'resolved' AND effectiveness_status = 'pending' THEN 1 END) as pending_effectiveness_count,
@@ -56,7 +70,8 @@ export async function fetchAnalyticsSummary(
     ${whereSql}
   `;
 
-  const row = await db.prepare(query).bind(...binds).first<{
+  // `?` de overdue_count apparaît dans le SELECT, donc avant ceux du WHERE.
+  const row = await db.prepare(query).bind(filters.businessToday, ...binds).first<{
     open_count: number;
     urgent_count: number;
     overdue_count: number;
@@ -87,14 +102,15 @@ export async function fetchRecurringGroups(
     categoryId?: number;
     windowDays: number;
     minCount: number;
+    businessToday: string;
   }
 ): Promise<ApiRecurringGroup[]> {
-  const { windowDays, minCount } = filters;
+  const { windowDays, minCount, businessToday } = filters;
   const groups: ApiRecurringGroup[] = [];
 
   // 1. Récurrence locale (scope: 'location') -> location_id + subcategory_id
-  let locWhere = "subcategory_id IS NOT NULL AND occurred_on >= date('now', '-' || ? || ' days')";
-  const locBinds: (number | string)[] = [windowDays];
+  let locWhere = "subcategory_id IS NOT NULL AND occurred_on >= date(?, '-' || ? || ' days')";
+  const locBinds: (number | string)[] = [businessToday, windowDays];
 
   if (filters.locationId !== undefined) {
     locWhere += " AND location_id = ?";
@@ -142,8 +158,8 @@ export async function fetchRecurringGroups(
   }
 
   // 2. Récurrence organisationnelle (scope: 'organization') -> subcategory_id
-  let orgWhere = "subcategory_id IS NOT NULL AND occurred_on >= date('now', '-' || ? || ' days')";
-  const orgBinds: (number | string)[] = [windowDays];
+  let orgWhere = "subcategory_id IS NOT NULL AND occurred_on >= date(?, '-' || ? || ' days')";
+  const orgBinds: (number | string)[] = [businessToday, windowDays];
 
   if (filters.departmentId !== undefined) {
     orgWhere += " AND department_id = ?";

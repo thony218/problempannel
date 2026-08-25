@@ -74,7 +74,8 @@ export async function findAttachmentById(
   return result || null;
 }
 
-export async function insertAttachment(
+/** Statement d'insertion, à grouper avec son événement d'historique (G-007). */
+export function insertAttachmentStatement(
   db: D1Database,
   data: {
     issueId: number;
@@ -84,8 +85,8 @@ export async function insertAttachment(
     sizeBytes: number;
     r2Key: string;
   }
-): Promise<AttachmentRow> {
-  const result = await db
+): D1PreparedStatement {
+  return db
     .prepare(
       `INSERT INTO attachments (issue_id, uploaded_by_user_id, original_name, content_type, size_bytes, r2_key)
        VALUES (?, ?, ?, ?, ?, ?)
@@ -99,20 +100,15 @@ export async function insertAttachment(
       data.contentType,
       data.sizeBytes,
       data.r2Key
-    )
-    .first<AttachmentRow>();
-
-  if (!result) {
-    throw new Error("Échec de l'insertion de la pièce jointe.");
-  }
-  return result;
+    );
 }
 
-export async function softDeleteAttachment(
+/** Statement de soft-delete, à grouper avec son événement d'historique (G-007). */
+export function softDeleteAttachmentStatement(
   db: D1Database,
   data: { attachmentId: number; deletedByUserId: number; deleteReason?: string | null }
-): Promise<void> {
-  await db
+): D1PreparedStatement {
+  return db
     .prepare(
       `UPDATE attachments
        SET deleted_at = strftime('%Y-%m-%dT%H:%M:%fZ','now'),
@@ -120,6 +116,5 @@ export async function softDeleteAttachment(
            delete_reason = ?
        WHERE id = ?`
     )
-    .bind(data.deletedByUserId, data.deleteReason ?? null, data.attachmentId)
-    .run();
+    .bind(data.deletedByUserId, data.deleteReason ?? null, data.attachmentId);
 }

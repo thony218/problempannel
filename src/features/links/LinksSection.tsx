@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../auth/AuthContext";
 import type { components } from "../../shared/api-types.generated";
+import { apiFetch } from "../../shared/apiClient";
 
 export type ApiIssueLink = components["schemas"]["IssueLink"];
 export type ApiRecurringGroup = components["schemas"]["RecurringGroup"];
@@ -27,8 +28,8 @@ export function LinksSection({ publicId, subcategoryId, locationId, onSelectIssu
   const fetchLinksAndRecurrence = useCallback(async () => {
     try {
       const [linksRes, recRes] = await Promise.all([
-        fetch(`/api/issues/${publicId}/links`, { headers: { Accept: "application/json" } }),
-        subcategoryId ? fetch(`/api/analytics/recurring`, { headers: { Accept: "application/json" } }) : null,
+        apiFetch(`/api/issues/${publicId}/links`, { headers: { Accept: "application/json" } }),
+        subcategoryId ? apiFetch(`/api/analytics/recurring`, { headers: { Accept: "application/json" } }) : null,
       ]);
 
       if (linksRes.ok) {
@@ -64,7 +65,7 @@ export function LinksSection({ publicId, subcategoryId, locationId, onSelectIssu
     setAddError(null);
 
     try {
-      const res = await fetch(`/api/issues/${publicId}/links`, {
+      const res = await apiFetch(`/api/issues/${publicId}/links`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ relatedPublicId: relatedPublicId.trim().toUpperCase() }),
@@ -89,7 +90,7 @@ export function LinksSection({ publicId, subcategoryId, locationId, onSelectIssu
 
     setDeletingId(relId);
     try {
-      const res = await fetch(`/api/issues/${publicId}/links/${relId}`, {
+      const res = await apiFetch(`/api/issues/${publicId}/links/${relId}`, {
         method: "DELETE",
         headers: { Accept: "application/json" },
       });

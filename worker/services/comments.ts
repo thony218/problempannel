@@ -6,12 +6,16 @@ import { findIssueRowById } from "../db/issues";
 import {
   findCommentById,
   findCommentsByIssueId,
-  insertComment,
+  insertCommentStatement,
   mapCommentRow,
-  softDeleteComment,
+  softDeleteCommentStatement,
   type ApiComment,
+  type CommentRow,
 } from "../db/comments";
-import { insertHistoryEventStatement } from "../db/history";
+import {
+  insertHistoryEventForJustCreatedChildStatement,
+  insertHistoryEventStatement,
+} from "../db/history";
 import type { CreateCommentInput, DeleteCommentInput, ListCommentsQuery } from "../validation/comments";
 
 export type Role = components["schemas"]["Role"];
@@ -68,19 +72,23 @@ export async function createComment(
   const issue = await findIssueRowById(db, issueId);
   if (!issue) return null;
 
-  const created = await insertComment(db, {
-    issueId,
-    userId: actorUserId,
-    body: input.body.trim(),
-  });
+  // Le commentaire et sa trace d'audit dans une seule transaction (G-007) :
+  // une panne entre les deux écritures laisserait un commentaire sans
+  // événement correspondant dans l'historique du dossier.
+  const results = await db.batch<CommentRow>([
+    insertCommentStatement(db, { issueId, userId: actorUserId, body: input.body.trim() }),
+    insertHistoryEventForJustCreatedChildStatement(
+      db,
+      issueId,
+      { actorUserId, eventType: "comment_created", idPayloadKey: "commentId" },
+      "comments"
+    ),
+  ]);
 
-  // Consigner l'événement d'historique
-  await insertHistoryEventStatement(db, issueId, {
-    actorUserId,
-    eventType: "comment_created",
-    payload: { commentId: created.id },
-  }).run();
-
+  const created = results[0]?.results?.[0];
+  if (!created) {
+    throw new Error("Échec de l'insertion du commentaire.");
+  }
   return mapCommentRow(created);
 }
 
@@ -103,18 +111,18 @@ export async function deleteComment(
     throw new AppError("FORBIDDEN", "Seuls les gestionnaires et administrateurs peuvent supprimer un commentaire.");
   }
 
-  await softDeleteComment(db, {
-    commentId,
-    deletedByUserId: actorUserId,
-    deleteReason: input.reason.trim(),
-  });
-
-  // Consigner l'événement d'historique sur le dossier parent
-  await insertHistoryEventStatement(db, comment.issue_id, {
-    actorUserId,
-    eventType: "comment_deleted",
-    payload: { commentId },
-  }).run();
+  await db.batch([
+    softDeleteCommentStatement(db, {
+      commentId,
+      deletedByUserId: actorUserId,
+      deleteReason: input.reason.trim(),
+    }),
+    insertHistoryEventStatement(db, comment.issue_id, {
+      actorUserId,
+      eventType: "comment_deleted",
+      payload: { commentId },
+    }),
+  ]);
 
   return true;
 }

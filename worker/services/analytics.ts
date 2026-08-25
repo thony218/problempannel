@@ -7,12 +7,17 @@ import {
   type ApiEffectiveness,
   type ApiRecurringGroup,
 } from "../db/analytics";
+import { businessToday, type AppConfig } from "../domain/config";
 
 export async function getAnalyticsSummary(
   db: D1Database,
-  filters: AnalyticsFilterParams
+  filters: AnalyticsFilterParams,
+  config: Pick<AppConfig, "businessTimeZone">
 ): Promise<ApiAnalyticsSummary> {
-  return fetchAnalyticsSummary(db, filters);
+  return fetchAnalyticsSummary(db, {
+    ...filters,
+    businessToday: businessToday(config.businessTimeZone),
+  });
 }
 
 export async function getRecurringIssues(
@@ -22,15 +27,13 @@ export async function getRecurringIssues(
     departmentId?: number;
     categoryId?: number;
   },
-  config: {
-    windowDays: number;
-    minCount: number;
-  }
+  config: Pick<AppConfig, "businessTimeZone" | "recurringWindowDays" | "recurringMinCount">
 ): Promise<ApiRecurringGroup[]> {
   return fetchRecurringGroups(db, {
     ...filters,
-    windowDays: config.windowDays,
-    minCount: config.minCount,
+    windowDays: config.recurringWindowDays,
+    minCount: config.recurringMinCount,
+    businessToday: businessToday(config.businessTimeZone),
   });
 }
 

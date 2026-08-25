@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { useAuth } from "../auth/AuthContext";
+import { PATHS, issueDetailPath } from "../../routes/paths";
+import { businessToday } from "../../shared/businessDate";
 import type { components } from "../../shared/api-types.generated";
 import { apiFetch } from "../../shared/apiClient";
 
@@ -7,13 +10,35 @@ export type Issue = components["schemas"]["Issue"];
 export type IssueStatus = components["schemas"]["IssueStatus"];
 export type Priority = components["schemas"]["Priority"];
 
-export interface IssueListProps {
-  onSelectIssue: (publicId: string) => void;
-  onNewIssue: () => void;
-}
+/**
+ * Registre.
+ *
+ * Les filtres vivent dans l'URL, pas dans un état local
+ * (01_produit/ux/01_NAVIGATION_ET_ARBORESCENCE.md : « les filtres du Registre
+ * doivent vivre dans l'URL afin que refresh/retour navigateur ne les perde
+ * pas »). C'est ce qui satisfait S39 — revenir d'un dossier restitue la liste
+ * telle qu'elle était — et ce qui rend une vue filtrée partageable entre
+ * collègues.
+ */
+export function IssueList() {
+  const { meta, user } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-export function IssueList({ onSelectIssue, onNewIssue }: IssueListProps) {
-  const { meta } = useAuth();
+  /** Lit un filtre depuis l'URL, avec sa valeur par défaut. */
+  const param = (key: string, fallback = "") => searchParams.get(key) ?? fallback;
+
+  /**
+   * Écrit un filtre dans l'URL. `replace: true` : ajuster un filtre ne doit pas
+   * empiler une entrée d'historique par frappe, sinon le bouton Retour du
+   * navigateur devient inutilisable.
+   */
+  const setParam = (key: string, value: string, emptyValue = "") => {
+    const next = new URLSearchParams(searchParams);
+    if (value === emptyValue || value === "") next.delete(key);
+    else next.set(key, value);
+    setSearchParams(next, { replace: true });
+  };
 
   const [items, setItems] = useState<Issue[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -22,20 +47,31 @@ export function IssueList({ onSelectIssue, onNewIssue }: IssueListProps) {
   const [loadingMore, setLoadingMore] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Filtres
-  const [query, setQuery] = useState<string>("");
-  const [debouncedQuery, setDebouncedQuery] = useState<string>("");
-  const [status, setStatus] = useState<string>("all");
-  const [locationId, setLocationId] = useState<number | "">("");
-  const [categoryId, setCategoryId] = useState<number | "">("");
-  const [priority, setPriority] = useState<string>("all");
-  const [showFilters, setShowFilters] = useState<boolean>(false);
+  // Filtres — source unique : l'URL.
+  const query = param("q");
+  const status = param("status", "all");
+  const priority = param("priority", "all");
+  const locationId: number | "" = param("locationId") ? Number(param("locationId")) : "";
+  const categoryId: number | "" = param("categoryId") ? Number(param("categoryId")) : "";
 
-  // Debounce de la recherche textuelle
+  const setQuery = (value: string) => setParam("q", value);
+  const setStatus = (value: string) => setParam("status", value, "all");
+  const setPriority = (value: string) => setParam("priority", value, "all");
+  const setLocationId = (value: number | "") => setParam("locationId", value === "" ? "" : String(value));
+  const setCategoryId = (value: number | "") => setParam("categoryId", value === "" ? "" : String(value));
+
+  // Ouvrir le panneau d'emblée si l'URL porte déjà des filtres : sur un lien
+  // partagé ou un retour depuis un dossier, l'utilisateur doit voir de quoi la
+  // liste est filtrée sans avoir à déplier quoi que ce soit.
+  const [showFilters, setShowFilters] = useState<boolean>(
+    () => status !== "all" || priority !== "all" || locationId !== "" || categoryId !== ""
+  );
+
+  // La recherche est dé-rebondie avant l'appel réseau, pas avant l'écriture
+  // dans l'URL : le champ doit rester réactif à la frappe.
+  const [debouncedQuery, setDebouncedQuery] = useState<string>(query.trim());
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedQuery(query.trim());
-    }, 350);
+    const timer = setTimeout(() => setDebouncedQuery(query.trim()), 350);
     return () => clearTimeout(timer);
   }, [query]);
 
@@ -113,12 +149,8 @@ export function IssueList({ onSelectIssue, onNewIssue }: IssueListProps) {
   };
 
   const handleResetFilters = () => {
-    setQuery("");
     setDebouncedQuery("");
-    setStatus("all");
-    setLocationId("");
-    setCategoryId("");
-    setPriority("all");
+    setSearchParams(new URLSearchParams(), { replace: true });
   };
 
   const hasActiveFilters =
@@ -130,6 +162,25 @@ export function IssueList({ onSelectIssue, onNewIssue }: IssueListProps) {
     return meta?.locations.find((l) => l.id === locId)?.label || `Succursale #${locId}`;
   };
 
+
+  /**
+   * 03_ECRAN_REGISTRE.md §Carte dossier : le responsable est « toujours
+   * affiché », y compris quand il n'y en a pas — c'est précisément
+   * l'information utile pour un gestionnaire qui balaie la liste à la
+   * recherche de ce qui n'a été pris en charge par personne.
+   */
+  const getOwnerLabel = (ownerUserId?: number | null) => {
+    if (!ownerUserId) return "Non assigné";
+    // /api/meta ne publie pas l'annuaire des utilisateurs : à défaut du nom,
+    // l'identifiant reste une information exploitable.
+    return user && user.id === ownerUserId ? `${user.displayName} (vous)` : `Responsable #${ownerUserId}`;
+  };
+
+  /** Échéance dépassée = date métier strictement postérieure, cf. 08_DEFINITIONS_ANALYTIQUES.md. */
+  const isOverdue = (issue: Issue) =>
+    issue.dueDate != null &&
+    issue.status !== "resolved" &&
+    issue.dueDate < businessToday(meta?.config.businessTimeZone ?? "America/Toronto");
 
   const getCategoryLabel = (catId: number) => {
     return meta?.categories.find((c) => c.id === catId)?.label || `Catégorie #${catId}`;
@@ -164,7 +215,7 @@ export function IssueList({ onSelectIssue, onNewIssue }: IssueListProps) {
       {/* Barre d'outils supérieure */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" }}>
         <h2 style={{ margin: 0, fontSize: "1.35rem" }}>Registre des incidents</h2>
-        <button type="button" className="btn btn-primary" onClick={onNewIssue} data-testid="btn-new-from-list">
+        <button type="button" className="btn btn-primary" onClick={() => navigate(PATHS.newIssue)} data-testid="btn-new-from-list">
           ➕ Nouveau
         </button>
       </div>
@@ -315,14 +366,14 @@ export function IssueList({ onSelectIssue, onNewIssue }: IssueListProps) {
                 transition: "transform 0.1s ease, box-shadow 0.1s ease",
                 borderLeft: issue.priority === "urgent" ? "4px solid var(--color-danger)" : issue.priority === "important" ? "4px solid var(--color-warning)" : undefined,
               }}
-              onClick={() => onSelectIssue(issue.publicId)}
+              onClick={() => navigate(issueDetailPath(issue.publicId))}
               data-testid={`issue-card-${issue.publicId}`}
               role="button"
               tabIndex={0}
               onKeyDown={(e) => {
                 if (e.key === "Enter" || e.key === " ") {
                   e.preventDefault();
-                  onSelectIssue(issue.publicId);
+                  navigate(issueDetailPath(issue.publicId));
                 }
               }}
             >
@@ -340,6 +391,18 @@ export function IssueList({ onSelectIssue, onNewIssue }: IssueListProps) {
                 <span>📅 {issue.occurredOn}</span>
                 <span>📍 {getLocationLabel(issue.locationId)}</span>
                 <span>🏷️ {getCategoryLabel(issue.categoryId)}</span>
+                <span data-testid={`issue-owner-${issue.publicId}`}>
+                  👤 {getOwnerLabel(issue.ownerUserId)}
+                </span>
+                {issue.dueDate && (
+                  <span
+                    data-testid={`issue-due-${issue.publicId}`}
+                    style={isOverdue(issue) ? { color: "var(--color-danger)", fontWeight: 600 } : undefined}
+                  >
+                    ⏳ Échéance : {issue.dueDate}
+                    {isOverdue(issue) ? " (en retard)" : ""}
+                  </span>
+                )}
               </div>
 
               <p

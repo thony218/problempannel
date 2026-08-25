@@ -206,20 +206,23 @@ export interface UpdateIssueRowOptions {
 }
 
 /**
- * UPDATE optimiste : la clause `WHERE id = ? AND row_version = ?` est le
- * dernier rempart contre une course entre la lecture du `If-Match` côté
- * service et cette écriture (cf. G-029-style "vérifié empiriquement, pas
- * supposé" — un service qui ne relit qu'au préalable laisse une fenêtre
- * ouverte). `null` si aucune ligne ne correspond (version périmée ou id
- * disparu) : le service traduit ça en 409.
+ * UPDATE optimiste, renvoyé **non exécuté** : l'appelant le place en dernier
+ * dans un `db.batch()` avec les écritures de suivi (impacts, historique), de
+ * sorte que la modification et sa trace d'audit soient une seule transaction.
+ *
+ * La clause `WHERE id = ? AND row_version = ?` est le dernier rempart contre
+ * une course entre la lecture du `If-Match` côté service et cette écriture :
+ * un service qui ne relit qu'au préalable laisse une fenêtre ouverte. Si
+ * aucune ligne ne correspond (version périmée ou id disparu), le `RETURNING`
+ * ne produit rien et le service traduit ça en 409.
  */
-export async function updateIssueRow(
+export function updateIssueRowStatement(
   db: D1Database,
   id: number,
   expectedRowVersion: number,
   columns: IssueColumnUpdates,
   options: UpdateIssueRowOptions = {}
-): Promise<IssueRow | null> {
+): D1PreparedStatement {
   const keys = Object.keys(columns) as (keyof IssueColumnUpdates)[];
   const setClauses = keys.map((key) => `${key} = ?`);
   const values: unknown[] = keys.map((key) => columns[key]);
@@ -233,34 +236,47 @@ export async function updateIssueRow(
   setClauses.push("row_version = row_version + 1");
   setClauses.push("updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')");
 
-  const row = await db
+  return db
     .prepare(
       `UPDATE issues SET ${setClauses.join(", ")} WHERE id = ? AND row_version = ? RETURNING ${ISSUE_COLUMNS}`
     )
-    .bind(...values, id, expectedRowVersion)
-    .first<IssueRow>();
-
-  return row ?? null;
+    .bind(...values, id, expectedRowVersion);
 }
 
 /**
  * Remplace intégralement les impacts d'un dossier existant (id déjà connu,
  * contrairement à insertIssue où l'id n'existe pas encore). `impacts` est
  * garanti non vide par le schéma Zod (min 1) quand ce champ est fourni.
+ *
+ * Les deux statements portent le même garde de version que l'UPDATE qui les
+ * suit dans le batch : si la version a bougé, ils ne font rien plutôt que de
+ * remplacer les impacts d'une modification qui sera rejetée en 409.
  */
 export function replaceIssueImpactsStatements(
   db: D1Database,
   issueId: number,
-  impacts: NewIssueImpact[]
+  impacts: NewIssueImpact[],
+  expectedRowVersion: number
 ): D1PreparedStatement[] {
-  const del = db.prepare("DELETE FROM issue_impacts WHERE issue_id = ?").bind(issueId);
+  const guard = "EXISTS (SELECT 1 FROM issues WHERE id = ? AND row_version = ?)";
+
+  const del = db
+    .prepare(`DELETE FROM issue_impacts WHERE issue_id = ? AND ${guard}`)
+    .bind(issueId, issueId, expectedRowVersion);
+
   const placeholders = impacts.map(() => "(?, ?, ?)").join(", ");
   const insert = db
     .prepare(
       `INSERT INTO issue_impacts (issue_id, impact_type_id, details)
-       SELECT column1, column2, column3 FROM (VALUES ${placeholders})`
+       SELECT column1, column2, column3 FROM (VALUES ${placeholders})
+       WHERE ${guard}`
     )
-    .bind(...impacts.flatMap((impact) => [issueId, impact.impactTypeId, impact.details]));
+    .bind(
+      ...impacts.flatMap((impact) => [issueId, impact.impactTypeId, impact.details]),
+      issueId,
+      expectedRowVersion
+    );
+
   return [del, insert];
 }
 
