@@ -165,13 +165,13 @@ export function CorrectiveActionsSection({ publicId }: CorrectiveActionsSectionP
   const getStatusBadge = (st: CorrectiveActionStatus) => {
     switch (st) {
       case "todo":
-        return <span className="role-badge" style={{ backgroundColor: "#f1f5f9", color: "#475569" }}>À faire</span>;
+        return <span className="role-badge" style={{ backgroundColor: "var(--st-new-bg)", color: "var(--st-new-fg)" }}>À faire</span>;
       case "inProgress":
-        return <span className="role-badge" style={{ backgroundColor: "#fef3c7", color: "#92400e" }}>En cours</span>;
+        return <span className="role-badge" style={{ backgroundColor: "var(--st-prog-bg)", color: "var(--st-prog-fg)" }}>En cours</span>;
       case "waiting":
-        return <span className="role-badge" style={{ backgroundColor: "#ede9fe", color: "#5b21b6" }}>En attente</span>;
+        return <span className="role-badge" style={{ backgroundColor: "var(--st-wait-bg)", color: "var(--st-wait-fg)" }}>En attente</span>;
       case "done":
-        return <span className="role-badge" style={{ backgroundColor: "#dcfce7", color: "#166534" }}>Terminé</span>;
+        return <span className="role-badge" style={{ backgroundColor: "var(--st-done-bg)", color: "var(--st-done-fg)" }}>Terminé</span>;
     }
   };
 
@@ -254,7 +254,7 @@ export function CorrectiveActionsSection({ publicId }: CorrectiveActionsSectionP
                 </div>
 
                 {act.result && (
-                  <div style={{ marginTop: "0.5rem", padding: "0.5rem", backgroundColor: "#f8fafc", borderRadius: 4, fontSize: "0.85rem" }}>
+                  <div style={{ marginTop: "0.5rem", padding: "0.5rem", backgroundColor: "var(--surface-2)", borderRadius: 4, fontSize: "0.85rem" }}>
                     <strong>Résultat :</strong> {act.result}
                   </div>
                 )}

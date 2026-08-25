@@ -335,7 +335,7 @@ export function AdminView() {
                     padding: "0.75rem",
                     border: "1px solid var(--color-border)",
                     borderRadius: "var(--radius)",
-                    backgroundColor: u.active ? "var(--color-bg)" : "#f8fafc",
+                    backgroundColor: u.active ? "var(--color-bg)" : "var(--surface-2)",
                     opacity: u.active ? 1 : 0.65,
                     flexWrap: "wrap",
                     gap: "0.5rem",
@@ -489,7 +489,7 @@ export function AdminView() {
                     padding: "0.65rem 0.85rem",
                     border: "1px solid var(--color-border)",
                     borderRadius: "var(--radius)",
-                    backgroundColor: item.active ? "var(--color-bg)" : "#f8fafc",
+                    backgroundColor: item.active ? "var(--color-bg)" : "var(--surface-2)",
                     opacity: item.active ? 1 : 0.65,
                   }}
                   data-testid={`ref-item-${item.id}`}

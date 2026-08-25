@@ -336,7 +336,7 @@ export function AnalyticsView() {
                   <div style={{ fontSize: "0.85rem", color: "var(--color-text-muted)" }}>En retard</div>
                 </div>
                 <div className="card" style={{ margin: 0, padding: "1rem", textAlign: "center" }}>
-                  <div style={{ fontSize: "1.75rem", fontWeight: 700, color: "#7c3aed" }}>{summary.waiting}</div>
+                  <div style={{ fontSize: "1.75rem", fontWeight: 700, color: "var(--st-wait-fg)" }}>{summary.waiting}</div>
                   <div style={{ fontSize: "0.85rem", color: "var(--color-text-muted)" }}>En attente</div>
                 </div>
                 <div className="card" style={{ margin: 0, padding: "1rem", textAlign: "center" }}>
@@ -344,15 +344,15 @@ export function AnalyticsView() {
                   <div style={{ fontSize: "0.85rem", color: "var(--color-text-muted)" }}>Résolus</div>
                 </div>
                 <div className="card" style={{ margin: 0, padding: "1rem", textAlign: "center" }}>
-                  <div style={{ fontSize: "1.75rem", fontWeight: 700, color: "#0891b2" }}>{summary.pendingEffectiveness}</div>
+                  <div style={{ fontSize: "1.75rem", fontWeight: 700, color: "var(--info)" }}>{summary.pendingEffectiveness}</div>
                   <div style={{ fontSize: "0.85rem", color: "var(--color-text-muted)" }}>Évaluation pending</div>
                 </div>
               </div>
 
               {summary.averageResolutionHours !== null && summary.averageResolutionHours !== undefined && (
-                <div className="card" style={{ backgroundColor: "#f0f9ff", borderColor: "#bae6fd" }}>
-                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1rem", color: "#0369a1" }}>⏱️ Temps moyen de résolution (MTTR)</h3>
-                  <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#0284c7" }}>
+                <div className="card" style={{ backgroundColor: "var(--info-bg)", borderColor: "var(--info)" }}>
+                  <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1rem", color: "var(--info)" }}>⏱️ Temps moyen de résolution (MTTR)</h3>
+                  <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--info)" }}>
                     {summary.averageResolutionHours} heures
                   </div>
                   <p style={{ margin: "0.25rem 0 0 0", fontSize: "0.8rem", color: "var(--color-text-muted)" }}>
@@ -385,8 +385,8 @@ export function AnalyticsView() {
                           justifyContent: "space-between",
                           alignItems: "center",
                           padding: "0.65rem 0.85rem",
-                          border: "1px solid #fed7aa",
-                          backgroundColor: "#fff7ed",
+                          border: "var(--bw) solid var(--warn)",
+                          backgroundColor: "var(--warn-bg)",
                           borderRadius: "var(--radius)",
                         }}
                       >
@@ -396,7 +396,7 @@ export function AnalyticsView() {
                             Dernier incident : {g.latestIssuePublicId}
                           </div>
                         </div>
-                        <span className="role-badge" style={{ backgroundColor: "#ea580c", color: "#ffffff", fontSize: "0.85rem" }}>
+                        <span className="role-badge" style={{ backgroundColor: "var(--warn)", color: "var(--surface)", fontSize: "0.85rem" }}>
                           {g.count} incidents / 90j
                         </span>
                       </div>
@@ -407,7 +407,7 @@ export function AnalyticsView() {
 
               {/* Bloc 2 : Dans l'organisation */}
               <div className="card">
-                <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1rem", color: "#7c3aed" }}>
+                <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1rem", color: "var(--st-wait-fg)" }}>
                   🏢 Récurrences dans l'organisation (Scope: Entreprise)
                 </h3>
                 {orgRecurring.length === 0 ? (
@@ -424,8 +424,8 @@ export function AnalyticsView() {
                           justifyContent: "space-between",
                           alignItems: "center",
                           padding: "0.65rem 0.85rem",
-                          border: "1px solid #e9d5ff",
-                          backgroundColor: "#faf5ff",
+                          border: "var(--bw) solid var(--line)",
+                          backgroundColor: "var(--surface-2)",
                           borderRadius: "var(--radius)",
                         }}
                       >
@@ -435,7 +435,7 @@ export function AnalyticsView() {
                             Dernier incident : {g.latestIssuePublicId}
                           </div>
                         </div>
-                        <span className="role-badge" style={{ backgroundColor: "#9333ea", color: "#ffffff", fontSize: "0.85rem" }}>
+                        <span className="role-badge" style={{ backgroundColor: "var(--accent)", color: "var(--accent-ink)", fontSize: "0.85rem" }}>
                           {g.count} incidents / 90j
                         </span>
                       </div>
@@ -504,15 +504,15 @@ export function AnalyticsView() {
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "0.75rem" }}>
-                <div className="card" style={{ margin: 0, padding: "1rem", backgroundColor: "#f0fdf4", borderColor: "#bbf7d0" }}>
-                  <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#166534" }}>{effectiveness.effective}</div>
+                <div className="card" style={{ margin: 0, padding: "1rem", backgroundColor: "var(--ok-bg)", borderColor: "var(--ok)" }}>
+                  <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--ok)" }}>{effectiveness.effective}</div>
                   <div style={{ fontSize: "0.85rem", color: "var(--color-text-muted)" }}>Corrections efficaces</div>
                 </div>
-                <div className="card" style={{ margin: 0, padding: "1rem", backgroundColor: "#fef2f2", borderColor: "#fecaca" }}>
-                  <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "#991b1b" }}>{effectiveness.ineffective}</div>
+                <div className="card" style={{ margin: 0, padding: "1rem", backgroundColor: "var(--crit-bg)", borderColor: "var(--crit)" }}>
+                  <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--crit)" }}>{effectiveness.ineffective}</div>
                   <div style={{ fontSize: "0.85rem", color: "var(--color-text-muted)" }}>Corrections inefficaces</div>
                 </div>
-                <div className="card" style={{ margin: 0, padding: "1rem", backgroundColor: "#f8fafc" }}>
+                <div className="card" style={{ margin: 0, padding: "1rem", backgroundColor: "var(--surface-2)" }}>
                   <div style={{ fontSize: "1.5rem", fontWeight: 700, color: "var(--color-text-muted)" }}>{effectiveness.pending}</div>
                   <div style={{ fontSize: "0.85rem", color: "var(--color-text-muted)" }}>En attente d'évaluation</div>
                 </div>

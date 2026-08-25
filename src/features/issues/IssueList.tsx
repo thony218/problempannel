@@ -208,13 +208,13 @@ export function IssueList() {
   const getStatusBadge = (st: IssueStatus) => {
     switch (st) {
       case "new":
-        return <span className="role-badge" style={{ backgroundColor: "#dbeafe", color: "#1e40af" }}>Nouveau</span>;
+        return <span className="role-badge" style={{ backgroundColor: "var(--st-new-bg)", color: "var(--st-new-fg)" }}>Nouveau</span>;
       case "inProgress":
-        return <span className="role-badge" style={{ backgroundColor: "#fef3c7", color: "#92400e" }}>En cours</span>;
+        return <span className="role-badge" style={{ backgroundColor: "var(--st-prog-bg)", color: "var(--st-prog-fg)" }}>En cours</span>;
       case "waiting":
-        return <span className="role-badge" style={{ backgroundColor: "#ede9fe", color: "#5b21b6" }}>En attente</span>;
+        return <span className="role-badge" style={{ backgroundColor: "var(--st-wait-bg)", color: "var(--st-wait-fg)" }}>En attente</span>;
       case "resolved":
-        return <span className="role-badge" style={{ backgroundColor: "#dcfce7", color: "#166534" }}>Résolu</span>;
+        return <span className="role-badge" style={{ backgroundColor: "var(--st-done-bg)", color: "var(--st-done-fg)" }}>Résolu</span>;
     }
   };
 
@@ -234,7 +234,7 @@ export function IssueList() {
       {/* Barre d'outils supérieure */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" }}>
         <h2 style={{ margin: 0, fontSize: "1.35rem" }}>Registre des incidents</h2>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
           <label htmlFor="issue-sort" style={{ fontSize: "0.85rem", color: "var(--color-text-muted)" }}>Trier</label>
           <select id="issue-sort" className="form-control" value={sort} onChange={(e) => setSort(e.target.value)} data-testid="issue-sort" style={{ minWidth: "145px" }}>
             <option value="newest">Plus récents</option>
@@ -250,7 +250,7 @@ export function IssueList() {
 
       {/* Barre de recherche et bouton de filtres */}
       <div className="card" style={{ padding: "0.875rem 1rem", marginBottom: "1rem" }}>
-        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
           <input
             type="search"
             className="form-control"
@@ -472,7 +472,7 @@ export function IssueList() {
               </p>
 
               {issue.status === "waiting" && issue.waitingOn && (
-                <div style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "#5b21b6", background: "#f5f3ff", padding: "0.25rem 0.5rem", borderRadius: "4px", display: "inline-block" }}>
+                <div style={{ marginTop: "0.5rem", fontSize: "0.8rem", color: "var(--st-wait-fg)", background: "var(--st-wait-bg)", padding: "0.25rem 0.5rem", borderRadius: "4px", display: "inline-block" }}>
                   ⏳ Attente : {issue.waitingOn.type === "customer" ? "Client" : issue.waitingOn.type === "supplier" ? "Fournisseur" : "Utilisateur"}
                 </div>
               )}

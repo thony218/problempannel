@@ -1,5 +1,23 @@
 <!doctype html>
 <html lang="fr">
-<head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Registre des erreurs</title></head>
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Registre des erreurs</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<script>
+/* Pose le thème retenu avant le premier rendu : sans cela l'interface
+   s'affiche brièvement dans le thème par défaut puis bascule, ce qui est
+   particulièrement visible en passant à « Poste de nuit » (clair -> sombre).
+   Les polices, elles, sont chargées par src/features/theme/themes.ts. */
+try {
+  var t = localStorage.getItem("registre.theme");
+  if (t === "atelier" || t === "ardoise" || t === "nuit" || t === "hv") {
+    document.documentElement.setAttribute("data-theme", t);
+  }
+} catch (e) { /* localStorage refusé : le thème par défaut s'applique. */ }
+</script>
+</head>
 <body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body>
 </html>
