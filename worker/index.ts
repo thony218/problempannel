@@ -10,6 +10,7 @@ import { correctiveActionRoutes } from "./routes/corrective-actions";
 import { historyRoutes } from "./routes/history";
 import { linkRoutes } from "./routes/links";
 import { analyticsRoutes } from "./routes/analytics";
+import { adminRoutes } from "./routes/admin";
 
 export const app = new Hono<AppEnv>();
 
@@ -37,5 +38,6 @@ app.route("/api", correctiveActionRoutes);
 app.route("/api", historyRoutes);
 app.route("/api", linkRoutes);
 app.route("/api", analyticsRoutes);
+app.route("/api", adminRoutes);
 
 export default app;

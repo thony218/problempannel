@@ -32,8 +32,8 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 | Bootstrap 0 | PRESQUE TERMINÉ — il ne reste que "CI verte" (bloqué : aucun remote Git configuré) |
 | Vague A — Fondations | TERMINÉ (FND-* + AUTH-01..05 + META-01/02 + ISSUE-01..06 + LIST-01..04 + DETAIL-01/02 + FLOW-01..04 + QA-01 faits) |
 | Vague B — Tranches verticales | TERMINÉ (COM-01..03, ATT-01..03, ACT-01..03, HIST-01/02, FLOW-05/06, LINK-01..03 faits) |
-| Vague C — Analytique & Administration | EN COURS (ANA-01..05 faits ; ADM-01..03 restent) |
-| Vague D | NON DÉMARRÉE |
+| Vague C — Analytique & Administration | TERMINÉ (ANA-01..05 + ADM-01..03 + V3-PRIV-01 faits) |
+| Vague D — Assurance Qualité & Exploitation | NON DÉMARRÉE |
 
 ---
 
@@ -697,7 +697,43 @@ Parcours complet exécuté dans un navigateur sur `npm run dev` (première fois 
   - Vague C entamée (Analytique terminée, reste Administration des utilisateurs et référentiels `ADM-01..03`).
 - **RFC ouverte** : non.
 - **Prochain propriétaire** : Intégrateur (agent) ou humain.
-  - Prochaine étape : `ADM-01..03` (Administration des utilisateurs, succursales, départements, catégories et sous-catégories).
+  - `ADM-01..03` et `V3-PRIV-01` pris en charge immédiatement ci-dessous.
 
 ---
+
+### 2026-08-24 — Administration & Procédure de Caviardage de Sécurité (ADM-01..03, V3-PRIV-01)
+
+- **Task IDs** :
+  - `ADM-01` (Gestion des utilisateurs : `GET /admin/users`, `POST /admin/users`, `PATCH /admin/users/{userId}` avec contrôle de rôle admin strict, création, changement de rôle et activation/désactivation, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+  - `ADM-02` (Gestion des référentiels typés : CRUD complet pour `/admin/locations`, `/admin/departments`, `/admin/categories`, `/admin/impact-types`, `/admin/subcategories` avec relation parent-catégorie, codes uniques et flags actifs, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+  - `ADM-03` (Interface d'administration complète : onglet `⚙️ Administration` réservé aux administrateurs avec sous-onglets utilisateurs et référentiels dynamiques, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+  - `V3-PRIV-01` (Procédure de caviardage de sécurité : endpoint `POST /admin/issues/{publicId}/redact` remplaçant les textes par `[CAVIARDÉ]`, marquant les commentaires caviardés, purgeant physiquement les pièces jointes de Cloudflare R2 et générant une entrée d'audit `issue_redacted` propre sans rétention des données sensibles d'origine, `01_produit/09_CAVIARDAGE_ET_HISTORIQUE.md`)
+- **Date** : 2026-08-24
+- **Owner** : Intégrateur (agent), sur demande explicite de l'utilisateur (« Fais ca : Administration ADM-01..03 et Caviardage & Confidentialité V3-PRIV-01 »).
+- **Lu avant d'implémenter** : `01_produit/04_MATRICE_PERMISSIONS.md`, `01_produit/09_CAVIARDAGE_ET_HISTORIQUE.md`, `contracts/openapi.yaml`.
+- **Fichiers produits/modifiés** :
+  - `worker/db/admin.ts` & `worker/services/admin.ts` & `worker/routes/admin.ts` : Implémentation complète des routes d'administration et de caviardage avec purge R2.
+  - `worker/index.ts` : Montage d'adminRoutes.
+  - `src/features/admin/RedactModal.tsx` : Modale de caviardage avec sélection des champs, motif obligatoire (min 5 car.) et confirmation explicite.
+  - `src/features/admin/AdminView.tsx` : Écran d'administration avec sous-onglets pour la gestion des utilisateurs, succursales, départements, catégories, sous-catégories et types d'impact.
+  - `src/features/issues/IssueDetailView.tsx` : Bouton d'action `🛡️ Caviarder` pour administrateurs et bannière d'avertissement en cas de dossier caviardé.
+  - `src/components/AppShell.tsx` & `src/App.tsx` : Intégration de l'onglet `⚙️ Administration` pour les administrateurs et routage vers `AdminView`.
+  - Tests :
+    - `tests/api/admin.test.ts` : 4 tests complets (sécurité 403 non-admin, cycle de vie utilisateur ADM-01, référentiels ADM-02, caviardage complet avec purge R2 et historique sain V3-PRIV-01).
+    - `tests/app/issue-views.test.tsx` : Tests de rendu pour `AdminView` et `RedactModal`.
+- **Commandes exécutées** :
+  - `npm run typecheck` (app, worker, test, e2e) → OK (0 erreur)
+  - `npm run test` (suite complète de tests) → **182/182 passés** (27 fichiers)
+  - `npm run verify` (from clean) → **exit 0**, **182/182 tests**, build client + worker OK.
+- **`npm run verify`** : **PASS** (exit 0)
+- **Staging testé** : non.
+- **Limitations connues / dette** :
+  - Vague C entièrement terminée (100% de l'Analytique et de l'Administration livrées).
+  - Vague D (Recette, Playwright E2E, déploiement staging) prête à démarrer.
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : Intégrateur (agent) ou humain.
+  - Prochaine étape : Vague D / `QA-04` (Parcours complet Playwright E2E) ou `OPS-01` (Déploiement Staging).
+
+---
+
 

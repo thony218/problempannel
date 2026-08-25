@@ -7,6 +7,7 @@ import { CorrectiveActionsSection } from "../corrective-actions/CorrectiveAction
 import { HistoryTimelineSection } from "../history/HistoryTimelineSection";
 import { LinksSection } from "../links/LinksSection";
 import { EditIssueModal } from "./EditIssueModal";
+import { RedactModal } from "../admin/RedactModal";
 
 export type IssueDetail = components["schemas"]["IssueDetail"];
 export type IssueStatus = components["schemas"]["IssueStatus"];
@@ -30,6 +31,7 @@ export function IssueDetailView({ publicId, onBack, onSelectIssue }: IssueDetail
 
   const [activeTab, setActiveTab] = useState<DetailTab>("details");
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showRedactModal, setShowRedactModal] = useState(false);
 
   const fetchIssue = useCallback(async () => {
     setLoading(true);
@@ -94,6 +96,7 @@ export function IssueDetailView({ publicId, onBack, onSelectIssue }: IssueDetail
   const { issue, impacts } = detail;
 
   const isManager = user?.role === "manager" || user?.role === "admin";
+  const isAdmin = user?.role === "admin";
   const isCreatorInNew = user?.role === "employee" && issue.createdByUserId === user?.id && issue.status === "new";
   const isOwnerEmployee = user?.role === "employee" && issue.ownerUserId === user?.id;
   const canEdit = isManager || isCreatorInNew || isOwnerEmployee;
@@ -164,6 +167,17 @@ export function IssueDetailView({ publicId, onBack, onSelectIssue }: IssueDetail
               ✏️ Modifier le dossier
             </button>
           )}
+          {isAdmin && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              style={{ color: "var(--color-danger)" }}
+              onClick={() => setShowRedactModal(true)}
+              data-testid="btn-open-redact"
+            >
+              🛡️ Caviarder
+            </button>
+          )}
           <button type="button" className="btn btn-secondary" onClick={fetchIssue} style={{ fontSize: "0.85rem" }}>
             🔄 Actualiser
           </button>
@@ -188,6 +202,13 @@ export function IssueDetailView({ publicId, onBack, onSelectIssue }: IssueDetail
           </div>
         </div>
       </div>
+
+      {/* Bannière de caviardage de sécurité (V3-PRIV-01) */}
+      {issue.redactedAt && (
+        <div className="alert alert-warning" style={{ fontSize: "0.85rem", marginBottom: "1rem" }} data-testid="banner-redacted">
+          🛡️ <strong>Dossier caviardé :</strong> Des informations personnelles ou confidentielles ont été caviardées le {new Date(issue.redactedAt).toLocaleDateString("fr-CA")} (Motif : {issue.redactionReason}).
+        </div>
+      )}
 
       {/* Onglets de sections */}
       <div className="tab-bar">
@@ -441,6 +462,15 @@ export function IssueDetailView({ publicId, onBack, onSelectIssue }: IssueDetail
           onClose={() => setShowEditModal(false)}
           onSuccess={fetchIssue}
           onReload={fetchIssue}
+        />
+      )}
+
+      {/* Modal de caviardage de sécurité (Admin) */}
+      {showRedactModal && (
+        <RedactModal
+          issue={issue}
+          onClose={() => setShowRedactModal(false)}
+          onSuccess={fetchIssue}
         />
       )}
     </div>

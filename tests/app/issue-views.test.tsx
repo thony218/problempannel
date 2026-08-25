@@ -13,6 +13,8 @@ import { HistoryTimelineSection } from "../../src/features/history/HistoryTimeli
 import { EditIssueModal } from "../../src/features/issues/EditIssueModal";
 import { LinksSection } from "../../src/features/links/LinksSection";
 import { AnalyticsView } from "../../src/features/analytics/AnalyticsView";
+import { AdminView } from "../../src/features/admin/AdminView";
+import { RedactModal } from "../../src/features/admin/RedactModal";
 
 /**
  * Rendu HTML réel des écrans (LIST-04, DETAIL-02, COM-03, ATT-03, ACT-03,
@@ -284,4 +286,47 @@ describe("ANA-05: Rendu du tableau de bord Analytics", () => {
     expect(html).toContain('data-testid="subtab-reviews"');
   });
 });
+
+describe("ADM-03: Rendu du panneau d'administration", () => {
+  it("renders admin subtabs and controls for admins", () => {
+    mockAuthAs("admin", 1);
+    const html = renderToStaticMarkup(<AdminView />);
+
+    expect(html).toContain('data-testid="admin-view"');
+    expect(html).toContain('data-testid="admintab-users"');
+    expect(html).toContain('data-testid="admintab-locations"');
+    expect(html).toContain('data-testid="admintab-departments"');
+    expect(html).toContain('data-testid="admintab-categories"');
+    expect(html).toContain('data-testid="admintab-subcategories"');
+    expect(html).toContain('data-testid="admintab-impactTypes"');
+    expect(html).toContain('data-testid="btn-open-create-user"');
+  });
+
+  it("renders forbidden state when non-admin accesses AdminView", () => {
+    mockAuthAs("employee", 2);
+    const html = renderToStaticMarkup(<AdminView />);
+
+    expect(html).toContain('data-testid="admin-forbidden"');
+  });
+});
+
+describe("V3-PRIV-01: Rendu de la modale de caviardage", () => {
+  it("renders redaction fields and security reason input", () => {
+    mockAuthAs("admin", 1);
+    const html = renderToStaticMarkup(
+      <RedactModal
+        issue={baseIssue({ description: "Information sensible du client" })}
+        onClose={() => {}}
+        onSuccess={async () => {}}
+      />
+    );
+
+    expect(html).toContain('data-testid="modal-redact-issue"');
+    expect(html).toContain('data-testid="form-redact"');
+    expect(html).toContain('data-testid="checkbox-redact-description"');
+    expect(html).toContain('data-testid="input-redact-reason"');
+    expect(html).toContain('data-testid="btn-confirm-redact"');
+  });
+});
+
 

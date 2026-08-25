@@ -1,7 +1,7 @@
 import React from "react";
 import { useAuth } from "../features/auth/AuthContext";
 
-export type NavTab = "new" | "list" | "analytics";
+export type NavTab = "new" | "list" | "analytics" | "admin";
 
 export interface AppShellProps {
   currentTab: NavTab;
@@ -110,6 +110,16 @@ export function AppShell({ currentTab, onTabChange, children }: AppShellProps) {
           >
             📊 Analyse
           </button>
+          {user?.role === "admin" && (
+            <button
+              type="button"
+              className={`nav-btn ${currentTab === "admin" ? "active" : ""}`}
+              onClick={() => onTabChange("admin")}
+              data-testid="tab-admin"
+            >
+              ⚙️ Administration
+            </button>
+          )}
         </div>
       </nav>
 

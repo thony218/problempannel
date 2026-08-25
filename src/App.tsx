@@ -5,6 +5,7 @@ import { CreateIssueForm } from "./features/issues/CreateIssueForm";
 import { IssueList } from "./features/issues/IssueList";
 import { IssueDetailView } from "./features/issues/IssueDetailView";
 import { AnalyticsView } from "./features/analytics/AnalyticsView";
+import { AdminView } from "./features/admin/AdminView";
 
 function AppContent() {
   const [currentTab, setCurrentTab] = useState<NavTab>("new");
@@ -35,7 +36,6 @@ function AppContent() {
       ) : currentTab === "new" ? (
         <CreateIssueForm
           onSuccess={(created) => {
-            // Après création, possibilité de consulter ou basculer
             setSelectedIssuePublicId(created.publicId);
           }}
         />
@@ -44,8 +44,10 @@ function AppContent() {
           onSelectIssue={handleSelectIssue}
           onNewIssue={() => handleTabChange("new")}
         />
-      ) : (
+      ) : currentTab === "analytics" ? (
         <AnalyticsView onSelectIssue={handleSelectIssue} />
+      ) : (
+        <AdminView />
       )}
     </AppShell>
   );
