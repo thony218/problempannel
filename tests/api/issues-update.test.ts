@@ -6,6 +6,16 @@ const EMPLOYEE_HEADER = { "X-Dev-User-Email": "creator@example.test", "Content-T
 const MANAGER_HEADER = { "X-Dev-User-Email": "second@example.test", "Content-Type": "application/json" };
 const OTHER_EMPLOYEE_HEADER = { "X-Dev-User-Email": "other_emp@example.test", "Content-Type": "application/json" };
 
+const VALID_RESOLUTION_FIELDS = {
+  causeStatus: "known" as const,
+  causeSummary: "Mauvaise manipulation du lecteur code-barres.",
+  permanentCorrectionType: "procedureUpdate" as const,
+  permanentCorrectionSummary: "Mise à jour du protocole de validation.",
+  finalResult: "Procédure validée avec succès.",
+  preventionLearning: "Former l'équipe.",
+  effectivenessStatus: "pending" as const,
+};
+
 async function get(path: string, headers = EMPLOYEE_HEADER) {
   return app.request(`http://local/api${path}`, { method: "GET", headers }, env);
 }
@@ -36,6 +46,7 @@ beforeEach(async () => {
   await env.DB.batch([
     env.DB.prepare("DELETE FROM issue_history"),
     env.DB.prepare("DELETE FROM issue_impacts"),
+    env.DB.prepare("DELETE FROM corrective_actions"),
     env.DB.prepare("DELETE FROM issues"),
     env.DB.prepare("DELETE FROM users"),
     env.DB.prepare("DELETE FROM subcategories"),
@@ -275,7 +286,7 @@ describe("PATCH /api/issues/:publicId", () => {
     const created = await createIssue({ subcategoryId });
     const resolvedRes = await patch(
       `/issues/${created.publicId}`,
-      { status: "resolved" },
+      { status: "resolved", ...VALID_RESOLUTION_FIELDS },
       { "If-Match": created.etag },
       MANAGER_HEADER
     );
@@ -359,7 +370,6 @@ describe("PATCH /api/issues/:publicId", () => {
     });
 
     it("S06: employee OWNER can transition inProgress -> waiting with supplier+label", async () => {
-      // Manager passe le dossier à inProgress et assigne userId (creator) comme owner
       const { publicId, etag } = await createIssue({ subcategoryId });
       const progressRes = await patch(
         `/issues/${publicId}`,
@@ -370,7 +380,6 @@ describe("PATCH /api/issues/:publicId", () => {
       expect(progressRes.status).toBe(200);
       const progressEtag = progressRes.headers.get("ETag") as string;
 
-      // L'employé owner passe à waiting
       const waitRes = await patch(
         `/issues/${publicId}`,
         { status: "waiting", waitingOn: { type: "supplier", label: "Fournisseur Test" } },
@@ -392,7 +401,6 @@ describe("PATCH /api/issues/:publicId", () => {
       );
       const progressEtag = progressRes.headers.get("ETag") as string;
 
-      // Un AUTRE employé tente de passer à waiting -> 403
       const res = await patch(
         `/issues/${publicId}`,
         { status: "waiting", waitingOn: { type: "supplier", label: "Fournisseur Test" } },
@@ -412,7 +420,6 @@ describe("PATCH /api/issues/:publicId", () => {
       );
       const waitEtag = waitRes.headers.get("ETag") as string;
 
-      // L'employé owner repasse à inProgress
       const progressRes = await patch(
         `/issues/${publicId}`,
         { status: "inProgress" },
@@ -444,7 +451,7 @@ describe("PATCH /api/issues/:publicId", () => {
       const { publicId, etag } = await createIssue({ subcategoryId });
       const resolvedRes = await patch(
         `/issues/${publicId}`,
-        { status: "resolved" },
+        { status: "resolved", ...VALID_RESOLUTION_FIELDS },
         { "If-Match": etag },
         MANAGER_HEADER
       );
@@ -459,6 +466,132 @@ describe("PATCH /api/issues/:publicId", () => {
       expect(res.status).toBe(422);
       const body = (await res.json()) as any;
       expect(body.error.code).toBe("INVALID_STATUS_TRANSITION");
+    });
+  });
+
+  describe("Préconditions de résolution FLOW-03 (S10, S11, S12)", () => {
+    it("S10: manager can resolve an issue when all required resolution fields are present", async () => {
+      const { publicId, etag } = await createIssue({ subcategoryId });
+      const res = await patch(
+        `/issues/${publicId}`,
+        {
+          status: "resolved",
+          causeStatus: "known",
+          causeSummary: "Panne du module WiFi lors du scan.",
+          permanentCorrectionType: "systemConfiguration",
+          permanentCorrectionSummary: "Remplacement du canal WiFi 5GHz.",
+          finalResult: "Fonctionnement rétabli et vérifié sur 5 appareils.",
+          preventionLearning: "Ajouter la vérification des bornes WiFi dans la checklist.",
+          effectivenessStatus: "effective",
+        },
+        { "If-Match": etag },
+        MANAGER_HEADER
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(body.data.issue.status).toBe("resolved");
+      expect(body.data.issue.causeStatus).toBe("known");
+      expect(body.data.issue.causeSummary).toBe("Panne du module WiFi lors du scan.");
+      expect(body.data.issue.permanentCorrectionType).toBe("systemConfiguration");
+      expect(body.data.issue.permanentCorrectionSummary).toBe("Remplacement du canal WiFi 5GHz.");
+      expect(body.data.issue.finalResult).toBe("Fonctionnement rétabli et vérifié sur 5 appareils.");
+      expect(body.data.issue.preventionLearning).toBe("Ajouter la vérification des bornes WiFi dans la checklist.");
+      expect(body.data.issue.effectivenessStatus).toBe("effective");
+    });
+
+    it("rejects resolution with 422 if resolution fields are missing", async () => {
+      const { publicId, etag } = await createIssue({ subcategoryId });
+      const res = await patch(
+        `/issues/${publicId}`,
+        { status: "resolved" },
+        { "If-Match": etag },
+        MANAGER_HEADER
+      );
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as any;
+      expect(body.error.fields.causeStatus).toBeDefined();
+      expect(body.error.fields.causeSummary).toBeDefined();
+      expect(body.error.fields.permanentCorrectionType).toBeDefined();
+      expect(body.error.fields.permanentCorrectionSummary).toBeDefined();
+      expect(body.error.fields.finalResult).toBeDefined();
+      expect(body.error.fields.preventionLearning).toBeDefined();
+      expect(body.error.fields.effectivenessStatus).toBeDefined();
+    });
+
+    it("S11: rejects resolution with 422 when open blocking corrective action exists, accepts when action is done", async () => {
+      const { publicId, etag } = await createIssue({ subcategoryId });
+      const issueId = Number(publicId.replace("INC-", ""));
+
+      // Créer une action corrective bloquante ouverte (status = 'todo', blocks_issue_closure = 1)
+      await env.DB.prepare(
+        `INSERT INTO corrective_actions (issue_id, title, owner_user_id, due_date, status, blocks_issue_closure)
+         VALUES (?, 'Mise à jour firmware obligatoire', ?, '2026-09-01', 'todo', 1)`
+      )
+        .bind(issueId, userId)
+        .run();
+
+      // Tentative de résolution -> 422
+      const failRes = await patch(
+        `/issues/${publicId}`,
+        { status: "resolved", ...VALID_RESOLUTION_FIELDS },
+        { "If-Match": etag },
+        MANAGER_HEADER
+      );
+      expect(failRes.status).toBe(422);
+      const failBody = (await failRes.json()) as any;
+      expect(failBody.error.fields.status).toContain("action(s) corrective(s) bloquante(s)");
+
+      // Terminer l'action corrective (status = 'done')
+      await env.DB.prepare(
+        `UPDATE corrective_actions SET status = 'done', completed_at = '2026-08-24T20:00:00Z' WHERE issue_id = ?`
+      )
+        .bind(issueId)
+        .run();
+
+      // Nouvelle tentative de résolution -> 200
+      const successRes = await patch(
+        `/issues/${publicId}`,
+        { status: "resolved", ...VALID_RESOLUTION_FIELDS },
+        { "If-Match": etag },
+        MANAGER_HEADER
+      );
+      expect(successRes.status).toBe(200);
+      const successBody = (await successRes.json()) as any;
+      expect(successBody.data.issue.status).toBe("resolved");
+    });
+
+    it("S12: pending effectiveness defaults reviewDate to +30 days when omitted", async () => {
+      const { publicId, etag } = await createIssue({ subcategoryId });
+      const res = await patch(
+        `/issues/${publicId}`,
+        { status: "resolved", ...VALID_RESOLUTION_FIELDS, effectivenessStatus: "pending" },
+        { "If-Match": etag },
+        MANAGER_HEADER
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(body.data.issue.effectivenessStatus).toBe("pending");
+      expect(body.data.issue.effectivenessReviewDate).not.toBeNull();
+      // Doit correspondre à une date ISO YYYY-MM-DD
+      expect(body.data.issue.effectivenessReviewDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    });
+
+    it("preserves explicitly provided effectivenessReviewDate when pending", async () => {
+      const { publicId, etag } = await createIssue({ subcategoryId });
+      const res = await patch(
+        `/issues/${publicId}`,
+        {
+          status: "resolved",
+          ...VALID_RESOLUTION_FIELDS,
+          effectivenessStatus: "pending",
+          effectivenessReviewDate: "2026-11-15",
+        },
+        { "If-Match": etag },
+        MANAGER_HEADER
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(body.data.issue.effectivenessReviewDate).toBe("2026-11-15");
     });
   });
 });

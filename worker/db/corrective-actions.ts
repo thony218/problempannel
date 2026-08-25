@@ -62,3 +62,21 @@ export async function findCorrectiveActionsByIssueId(
 
   return (result.results || []).map(mapCorrectiveActionRow);
 }
+
+/**
+ * Compte le nombre d'actions correctives bloquantes non terminées pour un dossier donné.
+ * Une action bloque la résolution si blocks_issue_closure = 1 et status != 'done'.
+ */
+export async function countOpenBlockingCorrectiveActions(
+  db: D1Database,
+  issueId: number
+): Promise<number> {
+  const result = await db
+    .prepare(
+      `SELECT COUNT(*) as count FROM corrective_actions WHERE issue_id = ? AND blocks_issue_closure = 1 AND status != 'done'`
+    )
+    .bind(issueId)
+    .first<{ count: number }>();
+  return result?.count ?? 0;
+}
+

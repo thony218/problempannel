@@ -6,7 +6,9 @@ import { findActiveReferenceById, findActiveReferencesByIds, type ReferenceItem 
 import { findActiveUserById } from "../db/users";
 import {
   CAUSE_STATUS_API_TO_DB,
+  CAUSE_STATUS_DB_TO_API,
   PERMANENT_CORRECTION_TYPE_API_TO_DB,
+  PERMANENT_CORRECTION_TYPE_DB_TO_API,
   STATUS_API_TO_DB,
   STATUS_DB_TO_API,
   findIssueByPublicId,
@@ -21,11 +23,17 @@ import {
   type IssueRow,
 } from "../db/issues";
 import { findImpactsByIssueId } from "../db/impacts";
-import { findCorrectiveActionsByIssueId } from "../db/corrective-actions";
+import { countOpenBlockingCorrectiveActions, findCorrectiveActionsByIssueId } from "../db/corrective-actions";
 import { insertHistoryEventStatement } from "../db/history";
 import { issueETag } from "../domain/etag";
 import { validateStatusTransition, type Role } from "../domain/transitions";
+import {
+  computeDefaultReviewDate,
+  validateResolutionPreconditions,
+  type ApiEffectivenessStatus,
+} from "../domain/resolution";
 import type { CreateIssueInput, ListIssuesQuery, UpdateIssueInput } from "../validation/issues";
+
 
 
 export type IssueDetail = components["schemas"]["IssueDetail"];
@@ -364,7 +372,62 @@ export async function updateIssue(
   if ("effectivenessStatus" in input) columns.effectiveness_status = input.effectivenessStatus ?? null;
   if ("effectivenessReviewDate" in input) columns.effectiveness_review_date = input.effectivenessReviewDate ?? null;
 
+  if (nextStatusDb === "resolved") {
+    const effectiveCauseStatus =
+      input.causeStatus !== undefined
+        ? input.causeStatus
+        : current.cause_status
+          ? CAUSE_STATUS_DB_TO_API[current.cause_status]
+          : null;
+    const effectiveCauseSummary =
+      input.causeSummary !== undefined ? input.causeSummary : current.cause_summary;
+    const effectivePermanentCorrectionType =
+      input.permanentCorrectionType !== undefined
+        ? input.permanentCorrectionType
+        : current.permanent_correction_type
+          ? PERMANENT_CORRECTION_TYPE_DB_TO_API[current.permanent_correction_type]
+          : null;
+    const effectivePermanentCorrectionSummary =
+      input.permanentCorrectionSummary !== undefined
+        ? input.permanentCorrectionSummary
+        : current.permanent_correction_summary;
+    const effectiveFinalResult =
+      input.finalResult !== undefined ? input.finalResult : current.final_result;
+    const effectivePreventionLearning =
+      input.preventionLearning !== undefined ? input.preventionLearning : current.prevention_learning;
+    const effectiveEffectivenessStatus =
+      input.effectivenessStatus !== undefined
+        ? input.effectivenessStatus
+        : (current.effectiveness_status as ApiEffectivenessStatus | null);
+
+    const openBlockingActionsCount = await countOpenBlockingCorrectiveActions(db, id);
+
+    const resolutionErrors = validateResolutionPreconditions({
+      causeStatus: effectiveCauseStatus,
+      causeSummary: effectiveCauseSummary,
+      permanentCorrectionType: effectivePermanentCorrectionType,
+      permanentCorrectionSummary: effectivePermanentCorrectionSummary,
+      finalResult: effectiveFinalResult,
+      preventionLearning: effectivePreventionLearning,
+      effectivenessStatus: effectiveEffectivenessStatus,
+      openBlockingActionsCount,
+    });
+    Object.assign(fields, resolutionErrors);
+
+    // S12 / D-29 : si effectivenessStatus === 'pending' et date absente, +30 jours par défaut
+    if (effectiveEffectivenessStatus === "pending") {
+      const reviewDate =
+        input.effectivenessReviewDate !== undefined
+          ? input.effectivenessReviewDate
+          : current.effectiveness_review_date;
+      if (!reviewDate) {
+        columns.effectiveness_review_date = computeDefaultReviewDate();
+      }
+    }
+  }
+
   const waitingTouched = "waitingOn" in input;
+
   if (waitingTouched && input.waitingOn?.type === "user" && !waitingUser) {
     fields.waitingOn = "Utilisateur introuvable ou inactif.";
   }

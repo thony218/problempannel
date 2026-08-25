@@ -30,7 +30,7 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 | Vague | Statut |
 |---|---|
 | Bootstrap 0 | PRESQUE TERMINÉ — il ne reste que "CI verte" (bloqué : aucun remote Git configuré) |
-| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01 + ISSUE-01/02/03/04 + LIST-01/02/03 + DETAIL-01 + FLOW-01/02 faits ; META-02 UI, ISSUE-05+, FLOW-03/04 restent) |
+| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01 + ISSUE-01/02/03/04 + LIST-01/02/03 + DETAIL-01 + FLOW-01/02/03 faits ; META-02 UI, ISSUE-05+, FLOW-04 reste) |
 
 | Vague B — Tranches verticales | NON DÉMARRÉE |
 | Vague C | NON DÉMARRÉE |
@@ -367,5 +367,38 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
   - Côté frontend : `META-02` (Bootstrap React / Auth / Meta) pour démarrer l'interface.
 
 ---
+
+### 2026-08-24 — Préconditions de résolution & date de révision par défaut (FLOW-03)
+
+- **Task IDs** : FLOW-03 (validation résolution/reviewDate, `01_produit/01_CONTRAT_FONCTIONNEL_FINAL.md` §5, `00_gouvernance/05_DECISIONS_ARRETEES_GEL0.md` D-29, scénarios S10, S11, S12)
+- **Date** : 2026-08-24
+- **Owner** : Intégrateur (agent), sur demande explicite de l'utilisateur (« Go pour FLOW-03 »).
+- **Lu avant d'implémenter** : `01_produit/01_CONTRAT_FONCTIONNEL_FINAL.md` (§5 Résolution), `00_gouvernance/05_DECISIONS_ARRETEES_GEL0.md` (D-29 : pending à résolution → reviewDate défaut +30 jours), `01_produit/07_SCENARIOS_ACCEPTATION.md` (S10, S11, S12), `migrations/0001_core.sql` (`corrective_actions` table, `blocks_issue_closure`).
+- **Fichiers produits/modifiés** :
+  - `worker/db/corrective-actions.ts` — `countOpenBlockingCorrectiveActions(db, issueId)` : compte les actions correctives ayant `blocks_issue_closure = 1 AND status != 'done'`.
+  - `worker/db/issues.ts` — Export de `CAUSE_STATUS_DB_TO_API` et `PERMANENT_CORRECTION_TYPE_DB_TO_API`.
+  - `worker/domain/resolution.ts` :
+    - `validateResolutionPreconditions(params)` : valide la présence et non-vacuité des 7 champs requis (`causeStatus`, `causeSummary`, `permanentCorrectionType`, `permanentCorrectionSummary`, `finalResult`, `preventionLearning`, `effectivenessStatus`) et l'absence d'actions bloquantes ouvertes (`openBlockingActionsCount === 0`, `S11`).
+    - `computeDefaultReviewDate(baseDate)` : calcule la date à +30 jours au format ISO `YYYY-MM-DD` (`D-29`, `S12`).
+  - `worker/services/issues.ts` — Dans `updateIssue`, lorsque `nextStatusDb === "resolved"`, exécute `validateResolutionPreconditions`, associe les erreurs aux champs du 422, et initialise automatiquement `columns.effectiveness_review_date = computeDefaultReviewDate()` si `effectivenessStatus === "pending"` et aucune date n'est fournie.
+  - Tests :
+    - `tests/api/resolution-validation.test.ts` — Tests unitaires de `validateResolutionPreconditions` et `computeDefaultReviewDate`.
+    - `tests/api/issues-update.test.ts` — Tests d'intégration API couvrant `S10` (manager résout complet), refus 422 sur champs manquants, `S11` (refus 422 si action bloquante ouverte puis acceptation 200 dès que l'action est 'done'), et `S12` (date de révision par défaut à +30j si pending).
+- **Commandes exécutées** :
+  - `npm run typecheck` (app, worker, test, e2e) → OK (0 erreur)
+  - `npx vitest run tests/api/resolution-validation.test.ts tests/api/issues-update.test.ts` → **37/37 passés**
+  - `npm run test` (suite complète de tests) → **116/116 passés** (16 fichiers)
+  - `npm run verify` (from clean) → **exit 0**, **116/116 tests**
+- **`npm run verify`** : **PASS** (exit 0)
+- **Staging testé** : non.
+- **Limitations connues / dette** :
+  - `FLOW-04` (règles de réouverture et persistance/historique de `reopenReason`, S13) reste à implémenter.
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : Intégrateur (agent) ou humain.
+  - Côté backend : `FLOW-04` (règles de réouverture et historisation de `reopenReason`, S11/S13).
+  - Côté frontend : `META-02` (Bootstrap React / Auth / Meta) pour démarrer l'interface.
+
+---
+
 
 

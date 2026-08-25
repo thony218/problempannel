@@ -26,7 +26,7 @@ export const STATUS_API_TO_DB: Record<ApiIssueStatus, string> = {
   resolved: "resolved",
 };
 
-const CAUSE_STATUS_DB_TO_API: Record<string, ApiCauseStatus> = {
+export const CAUSE_STATUS_DB_TO_API: Record<string, ApiCauseStatus> = {
   to_verify: "toVerify",
   known: "known",
 };
@@ -36,7 +36,7 @@ export const CAUSE_STATUS_API_TO_DB: Record<ApiCauseStatus, string> = {
   known: "known",
 };
 
-const PERMANENT_CORRECTION_TYPE_DB_TO_API: Record<string, ApiPermanentCorrectionType> = {
+export const PERMANENT_CORRECTION_TYPE_DB_TO_API: Record<string, ApiPermanentCorrectionType> = {
   procedure_update: "procedureUpdate",
   new_procedure: "newProcedure",
   training: "training",
@@ -47,6 +47,7 @@ const PERMANENT_CORRECTION_TYPE_DB_TO_API: Record<string, ApiPermanentCorrection
   no_change_required: "noChangeRequired",
   other: "other",
 };
+
 
 export const PERMANENT_CORRECTION_TYPE_API_TO_DB: Record<ApiPermanentCorrectionType, string> = {
   procedureUpdate: "procedure_update",
