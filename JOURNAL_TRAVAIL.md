@@ -882,3 +882,27 @@ Le parcours E2E n'était pas écrivable avant que l'identité de développement 
   - Toute la dette technique corrigeable sans accès Cloudflare est résorbée. Le prochain jalon est le provisionnement.
 
 ---
+
+### 2026-08-24 — Préparation de production GitHub / Cloudflare
+
+- **Task IDs** : `OPS-01`, `OPS-02` (provisionnement et validation réelle, phase préparatoire).
+- **Date** : 2026-08-24
+- **Owner** : Codex, sur autorisation de publication de l'utilisateur.
+- **Commit(s)** : commit associé à cette entrée pour la configuration de production; la branche `main` a aussi reçu par avance rapide les correctifs `2e0334c`.
+- **Sauvegarde** : copie complète créée avant modification dans `/Users/anthobruneau/Downloads/Back up Codex/registre_erreurs_v4_final_2026-08-25_cloudflare-production-deployment`.
+- **Fichiers modifiés** : `wrangler.jsonc`, `wrangler.template.jsonc`, `package.json`, ce journal.
+- **Cloudflare configuré** : application Access auto-bloquante `Registre erreurs` pour `problems.chamaran.com`, avec une seule politique Allow pour le propriétaire. Aucun employé n'est autorisé; aucun dossier d'erreur réel n'a été créé.
+- **Configuration de déploiement** : environnement `production` dédié (Worker sans sous-domaine `workers.dev`, D1/R2 de production, validation Access JWT, limitation de débit et observabilité). Le build de production sélectionne explicitement `CLOUDFLARE_ENV=production`, nécessaire avec le plugin Vite Cloudflare.
+- **Commandes et résultats** :
+  - `npm ci` → **OK**, 0 vulnérabilité signalée.
+  - `npm run verify` → **PASS**, 221 tests (31 fichiers), build inclus. Le contrat OpenAPI garde un avertissement existant sur la réponse 4XX de `/health`.
+  - `npm run build:production && wrangler deploy --env production --dry-run` → **PASS** : Worker `registre-erreurs`, D1/R2 de production et variables Access corrects.
+  - `npm run test:e2e` → Chromium et mobile Chrome : **38 passés**. Mobile Safari : **19 non exécutés** car WebKit est absent de la machine (`playwright install` requis); ce n'est pas une assertion fonctionnelle en échec.
+  - `git diff --check` → **PASS**.
+- **`npm run verify`** : **PASS**.
+- **Staging testé** : non. La migration D1 distante, l'insertion du compte administrateur pilote et le déploiement réel n'ont pas été exécutés : le contrôle de sécurité demande une approbation explicite, car ces actions modifient durablement la production alors que le gate de confidentialité n'est pas formellement approuvé.
+- **Limitations connues / dette** : WebKit manque pour les E2E Safari; installer le navigateur avant la prochaine validation multi-navigateur.
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : Codex après approbation explicite de l'utilisateur, pour appliquer les migrations D1 et les référentiels, créer le seul administrateur pilote, déployer le Worker puis vérifier Access (anonyme et authentifié).
+
+---
