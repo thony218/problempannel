@@ -30,7 +30,7 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 | Vague | Statut |
 |---|---|
 | Bootstrap 0 | PRESQUE TERMINÉ — il ne reste que "CI verte" (bloqué : aucun remote Git configuré) |
-| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01/02 + ISSUE-01..05 + LIST-01..03 + DETAIL-01 + FLOW-01..04 + QA-01 faits ; ISSUE-06/07, LIST-04, DETAIL-02 restent) |
+| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01/02 + ISSUE-01..06 + LIST-01..04 + DETAIL-01/02 + FLOW-01..04 + QA-01 faits ; ISSUE-07 reste) |
 
 | Vague B — Tranches verticales | NON DÉMARRÉE |
 | Vague C | NON DÉMARRÉE |
@@ -482,10 +482,43 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
   - Toutes les règles de gestion et de permissions sur les dossiers (`FLOW-01..04`, `QA-01`) sont désormais actives et testées.
 - **RFC ouverte** : non.
 - **Prochain propriétaire** : Intégrateur (agent) ou humain.
-  - Frontend : `ISSUE-06` (Brouillon IndexedDB champs + fichiers) ou `LIST-04` (Registre mobile avec filtres et pagination curseur) ou `DETAIL-02` (Écran Détail en lecture).
-  - Backend : `COM-01`/`COM-02` (Commentaires) ou `ATT-01`/`ATT-02` (Pièces jointes R2) ou `ACT-01`/`ACT-02` (Actions correctives).
+  - `ISSUE-06`, `LIST-04` et `DETAIL-02` pris en charge immédiatement ci-dessous.
 
 ---
+
+### 2026-08-24 — Brouillons IndexedDB, Registre Mobile & Écran Détail (ISSUE-06, LIST-04, DETAIL-02)
+
+- **Task IDs** :
+  - `ISSUE-06` (Brouillon IndexedDB champs + fichiers, `01_produit/07_SCENARIOS_ACCEPTATION.md` S23-S25, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+  - `LIST-04` (Registre mobile avec filtres par statut/succursale/catégorie/priorité et pagination par curseur, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+  - `DETAIL-02` (Écran Détail en lecture de l'incident, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+- **Date** : 2026-08-24
+- **Owner** : Intégrateur (agent), sur demande explicite de l'utilisateur (« Fais c'est 3 la : ISSUE-06, LIST-04, DETAIL-02 »).
+- **Lu avant d'implémenter** : `01_produit/01_CONTRAT_FONCTIONNEL_FINAL.md` (sections 1 Déclaration, 2 Triage, 3 Responsable, 4 Waiting), `01_produit/07_SCENARIOS_ACCEPTATION.md` (S23 restauration brouillon, S24 suppression post-succès), `contracts/openapi.yaml` (`GET /api/issues`, `GET /api/issues/{publicId}`).
+- **Fichiers produits/modifiés** :
+  - `src/features/issues/draftStorage.ts` : Service de gestion des brouillons avec support IndexedDB et fallback `localStorage`/mémoire (`saveDraft`, `loadDraft`, `clearDraft`, `DraftAttachment`).
+  - `src/features/issues/CreateIssueForm.tsx` : Intégration de la restauration automatique du brouillon, sauvegarde automatique avec debounce, ajout de pièces jointes locales (photos/PDF avec aperçu) et suppression automatique du brouillon lors d'une création réussie (`S24`).
+  - `src/features/issues/IssueList.tsx` : Écran Registre mobile complet avec recherche textuelle dé-rebondie (`q`), filtres par statut, succursale, catégorie et priorité, cartes d'incidents interactives avec badges de statuts/priorités et pagination par curseur (`hasMore`/`nextCursor`).
+  - `src/features/issues/IssueDetailView.tsx` : Écran de consultation détaillée d'un incident affichant les informations générales, la description et liste des impacts, le bloc d'attente (si `waiting`), l'analyse de cause/correction permanente et la clôture/évaluation d'efficacité.
+  - `src/App.tsx` : Gestion fluide de la navigation entre le formulaire de création, le registre et la vue détaillée d'un incident sélectionné.
+  - `tests/app/draft-storage.test.ts` : Tests unitaires vérifiant la sauvegarde, la restauration (`S23`) et l'effacement (`S24`) du brouillon.
+  - `tests/app/issue-views.test.tsx` : Tests unitaires vérifiant la structure des composants d'affichage et la construction des paramètres de recherche du registre.
+- **Commandes exécutées** :
+  - `npm run typecheck` (app, worker, test, e2e) → OK (0 erreur)
+  - `npx vitest run tests/app/draft-storage.test.ts tests/app/issue-views.test.tsx` → **4/4 passés**
+  - `npm run test` (suite complète de tests) → **138/138 passés** (20 fichiers)
+  - `npm run verify` (from clean) → **exit 0**, **138/138 tests**, build client + worker OK.
+- **`npm run verify`** : **PASS** (exit 0)
+- **Staging testé** : non.
+- **Limitations connues / dette** :
+  - La Vague A des fondations est maintenant quasiment complète (seul `ISSUE-07` intégration staging reste).
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : Intégrateur (agent) ou humain.
+  - Backend : `COM-01`/`COM-02` (Commentaires) ou `ATT-01`/`ATT-02` (Pièces jointes R2) ou `ACT-01`/`ACT-02` (Actions correctives) ou `HIST-01` (Historique d'audit).
+  - Tranches verticales : Vague B.
+
+---
+
 
 
 

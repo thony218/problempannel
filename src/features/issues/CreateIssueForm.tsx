@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../auth/AuthContext";
 import type { components } from "../../shared/api-types.generated";
+import { loadDraft, saveDraft, clearDraft, type DraftAttachment } from "./draftStorage";
 
 export type Priority = components["schemas"]["Priority"];
 export type CreateIssueRequest = components["schemas"]["CreateIssueRequest"];
@@ -16,6 +17,7 @@ interface FormErrors {
   description?: string;
   priority?: string;
   impacts?: string;
+  attachments?: string;
   general?: string;
 }
 
@@ -36,23 +38,71 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
   const [description, setDescription] = useState<string>("");
   const [priority, setPriority] = useState<Priority>("normal");
   const [selectedImpacts, setSelectedImpacts] = useState<Record<number, { selected: boolean; details: string }>>({});
+  const [attachments, setAttachments] = useState<DraftAttachment[]>([]);
 
+  const [draftRestored, setDraftRestored] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const [createdIssue, setCreatedIssue] = useState<components["schemas"]["Issue"] | null>(null);
 
+  const isInitialMount = useRef(true);
 
-  // Initialiser les succursales / départements par défaut dès que le profil utilisateur est chargé
+  // 1. Restaurer le brouillon IndexedDB au chargement
   useEffect(() => {
-    if (user?.defaultLocationId && locationId === "") {
-      setLocationId(user.defaultLocationId);
-    }
-    if (user?.defaultDepartmentId && departmentId === "") {
-      setDepartmentId(user.defaultDepartmentId);
-    }
-  }, [user]);
+    let isMounted = true;
+    loadDraft().then((draft) => {
+      if (!isMounted || !draft) {
+        if (user?.defaultLocationId && locationId === "") {
+          setLocationId(user.defaultLocationId);
+        }
+        if (user?.defaultDepartmentId && departmentId === "") {
+          setDepartmentId(user.defaultDepartmentId);
+        }
+        return;
+      }
+      if (draft.occurredOn) setOccurredOn(draft.occurredOn);
+      if (draft.locationId !== undefined) setLocationId(draft.locationId);
+      if (draft.departmentId !== undefined) setDepartmentId(draft.departmentId);
+      if (draft.categoryId !== undefined) setCategoryId(draft.categoryId);
+      if (draft.subcategoryId !== undefined) setSubcategoryId(draft.subcategoryId);
+      if (draft.description) setDescription(draft.description);
+      if (draft.priority) setPriority(draft.priority);
+      if (draft.selectedImpacts) setSelectedImpacts(draft.selectedImpacts);
+      if (draft.attachments) setAttachments(draft.attachments);
+      setDraftRestored(true);
+    });
 
-  // Réinitialiser la sous-catégorie si la catégorie parente change
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  // 2. Sauvegarder automatiquement le brouillon lors des modifications
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
+    if (createdIssue) return;
+
+    const timer = setTimeout(() => {
+      saveDraft({
+        occurredOn,
+        locationId,
+        departmentId,
+        categoryId,
+        subcategoryId,
+        description,
+        priority,
+        selectedImpacts,
+        attachments,
+        updatedAt: Date.now(),
+      });
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [occurredOn, locationId, departmentId, categoryId, subcategoryId, description, priority, selectedImpacts, attachments, createdIssue]);
+
   const handleCategoryChange = (newCatId: number | "") => {
     setCategoryId(newCatId);
     setSubcategoryId("");
@@ -81,6 +131,70 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
     }));
   };
 
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+
+    const newAttachments: DraftAttachment[] = [...attachments];
+    const maxFiles = meta?.config.maxAttachmentsPerIssue ?? 10;
+    const maxBytes = meta?.config.maxAttachmentBytes ?? 10485760;
+
+    for (let i = 0; i < files.length; i++) {
+      if (newAttachments.length >= maxFiles) {
+        setErrors((prev) => ({
+          ...prev,
+          attachments: `Limite maximale atteinte (${maxFiles} fichiers max).`,
+        }));
+        break;
+      }
+
+      const file = files[i];
+      if (file.size > maxBytes) {
+        setErrors((prev) => ({
+          ...prev,
+          attachments: `Le fichier "${file.name}" dépasse la taille maximale autorisée (10 Mo).`,
+        }));
+        continue;
+      }
+
+      const dataUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(file);
+      });
+
+      newAttachments.push({
+        id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        dataUrl,
+      });
+    }
+
+    setAttachments(newAttachments);
+    e.target.value = "";
+  };
+
+  const handleRemoveAttachment = (id: string) => {
+    setAttachments((prev) => prev.filter((att) => att.id !== id));
+  };
+
+  const handleClearDraft = async () => {
+    await clearDraft();
+    setDraftRestored(false);
+    setDescription("");
+    setCategoryId("");
+    setSubcategoryId("");
+    setSelectedImpacts({});
+    setAttachments([]);
+    setPriority("normal");
+    setOccurredOn(todayStr);
+    setLocationId(user?.defaultLocationId ?? "");
+    setDepartmentId(user?.defaultDepartmentId ?? "");
+    setErrors({});
+  };
+
   const validateForm = (): boolean => {
     const newErrors: FormErrors = {};
 
@@ -106,7 +220,6 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
     if (activeSelectedImpacts.length === 0) {
       newErrors.impacts = "Veuillez sélectionner au moins un impact.";
     } else {
-      // Vérifier si un impact "Autre" a été sélectionné sans précision
       const otherImpactType = meta?.impactTypes.find((it) => it.code === "other");
       if (otherImpactType && selectedImpacts[otherImpactType.id]?.selected) {
         const details = selectedImpacts[otherImpactType.id]?.details?.trim();
@@ -171,6 +284,9 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
         return;
       }
 
+      // S24: création réussie -> suppression du brouillon
+      await clearDraft();
+
       setCreatedIssue(data.data);
       if (onSuccess) {
         onSuccess(data.data);
@@ -188,7 +304,9 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
     setCategoryId("");
     setSubcategoryId("");
     setSelectedImpacts({});
+    setAttachments([]);
     setPriority("normal");
+    setDraftRestored(false);
     setErrors({});
   };
 
@@ -214,7 +332,6 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
     );
   }
 
-  // Filtrer les sous-catégories pour n'afficher que celles associées à la catégorie choisie
   const availableSubcategories =
     categoryId !== ""
       ? meta?.subcategories.filter((sub) => sub.parentId === Number(categoryId) && sub.active) || []
@@ -222,7 +339,20 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
 
   return (
     <form className="card" onSubmit={handleSubmit} noValidate data-testid="create-issue-form">
-      <h2 className="card-title">Déclarer un nouvel incident</h2>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" }}>
+        <h2 className="card-title" style={{ margin: 0 }}>Déclarer un nouvel incident</h2>
+        {draftRestored && (
+          <button type="button" className="btn btn-secondary" style={{ padding: "0.35rem 0.75rem", fontSize: "0.8rem", minHeight: "36px" }} onClick={handleClearDraft}>
+            🗑️ Effacer le brouillon
+          </button>
+        )}
+      </div>
+
+      {draftRestored && (
+        <div className="alert alert-warning" style={{ fontSize: "0.85rem", padding: "0.5rem 0.75rem" }}>
+          💾 Brouillon automatique restauré.
+        </div>
+      )}
 
       {errors.general && (
         <div className="alert alert-danger" role="alert">
@@ -317,7 +447,7 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
         {errors.categoryId && <div className="field-error">{errors.categoryId}</div>}
       </div>
 
-      {/* Sous-catégorie (facultatif au dépôt) */}
+      {/* Sous-catégorie */}
       {categoryId !== "" && availableSubcategories.length > 0 && (
         <div className="form-group">
           <label htmlFor="subcategoryId" className="form-label">
@@ -420,6 +550,63 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
               );
             })}
         </div>
+      </div>
+
+      {/* Photos / Pièces jointes locales (ISSUE-06) */}
+      <div className="form-group">
+        <span className="form-label">Photos & Pièces jointes (optionnel)</span>
+        <div style={{ marginBottom: "0.5rem" }}>
+          <input
+            type="file"
+            id="attachment-input"
+            multiple
+            accept="image/jpeg,image/png,image/heic,image/heif,application/pdf"
+            onChange={handleFileChange}
+            style={{ display: "none" }}
+          />
+          <label htmlFor="attachment-input" className="btn btn-secondary" style={{ cursor: "pointer", display: "inline-flex" }}>
+            📎 Ajouter des photos / documents
+          </label>
+        </div>
+        {errors.attachments && <div className="field-error">{errors.attachments}</div>}
+
+        {attachments.length > 0 && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.5rem" }}>
+            {attachments.map((att) => (
+              <div
+                key={att.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  padding: "0.35rem 0.65rem",
+                  background: "var(--color-bg)",
+                  border: "1px solid var(--color-border)",
+                  borderRadius: "var(--radius)",
+                  fontSize: "0.85rem",
+                }}
+              >
+                <span>📄 {att.name} ({(att.size / 1024).toFixed(0)} Ko)</span>
+                <button
+                  type="button"
+                  onClick={() => handleRemoveAttachment(att.id)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    color: "var(--color-danger)",
+                    cursor: "pointer",
+                    fontWeight: "bold",
+                    fontSize: "1rem",
+                    padding: "0 0.25rem",
+                  }}
+                  title="Supprimer"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div style={{ marginTop: "1.5rem" }}>
