@@ -6,14 +6,21 @@ export type ApiCorrectiveActionStatus = components["schemas"]["CorrectiveActionS
 export type ApiEffectivenessStatus = components["schemas"]["EffectivenessStatus"];
 
 // D1 = snake_case, API = camelCase (02_contrats/01_CONVENTIONS_NOMMAGE.md).
-const STATUS_DB_TO_API: Record<string, ApiCorrectiveActionStatus> = {
+export const STATUS_DB_TO_API: Record<string, ApiCorrectiveActionStatus> = {
   todo: "todo",
   in_progress: "inProgress",
   waiting: "waiting",
   done: "done",
 };
 
-interface CorrectiveActionRow {
+export const STATUS_API_TO_DB: Record<ApiCorrectiveActionStatus, string> = {
+  todo: "todo",
+  inProgress: "in_progress",
+  waiting: "waiting",
+  done: "done",
+};
+
+export interface CorrectiveActionRow {
   id: number;
   issue_id: number;
   title: string;
@@ -29,7 +36,7 @@ interface CorrectiveActionRow {
   updated_at: string;
 }
 
-function mapCorrectiveActionRow(row: CorrectiveActionRow): ApiCorrectiveAction {
+export function mapCorrectiveActionRow(row: CorrectiveActionRow): ApiCorrectiveAction {
   return {
     id: row.id,
     issuePublicId: toPublicId(row.issue_id),
@@ -37,7 +44,7 @@ function mapCorrectiveActionRow(row: CorrectiveActionRow): ApiCorrectiveAction {
     description: row.description,
     ownerUserId: row.owner_user_id,
     dueDate: row.due_date,
-    status: STATUS_DB_TO_API[row.status],
+    status: STATUS_DB_TO_API[row.status] || "todo",
     blocksIssueClosure: row.blocks_issue_closure === 1,
     result: row.result,
     effectivenessStatus: row.effectiveness_status as ApiEffectivenessStatus | null,
@@ -63,10 +70,22 @@ export async function findCorrectiveActionsByIssueId(
   return (result.results || []).map(mapCorrectiveActionRow);
 }
 
-/**
- * Compte le nombre d'actions correctives bloquantes non terminées pour un dossier donné.
- * Une action bloque la résolution si blocks_issue_closure = 1 et status != 'done'.
- */
+export async function findCorrectiveActionById(
+  db: D1Database,
+  id: number
+): Promise<CorrectiveActionRow | null> {
+  const result = await db
+    .prepare(
+      `SELECT id, issue_id, title, description, owner_user_id, due_date, status, blocks_issue_closure,
+              result, effectiveness_status, completed_at, created_at, updated_at
+       FROM corrective_actions WHERE id = ?`
+    )
+    .bind(id)
+    .first<CorrectiveActionRow>();
+
+  return result || null;
+}
+
 export async function countOpenBlockingCorrectiveActions(
   db: D1Database,
   issueId: number
@@ -80,3 +99,86 @@ export async function countOpenBlockingCorrectiveActions(
   return result?.count ?? 0;
 }
 
+export async function insertCorrectiveAction(
+  db: D1Database,
+  data: {
+    issueId: number;
+    title: string;
+    description?: string | null;
+    ownerUserId: number;
+    dueDate: string;
+    status: string;
+    blocksIssueClosure: boolean;
+  }
+): Promise<CorrectiveActionRow> {
+  const completedAt = data.status === "done" ? new Date().toISOString() : null;
+
+  const result = await db
+    .prepare(
+      `INSERT INTO corrective_actions (
+         issue_id, title, description, owner_user_id, due_date, status,
+         blocks_issue_closure, completed_at
+       )
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+       RETURNING id, issue_id, title, description, owner_user_id, due_date, status,
+                 blocks_issue_closure, result, effectiveness_status, completed_at, created_at, updated_at`
+    )
+    .bind(
+      data.issueId,
+      data.title,
+      data.description ?? null,
+      data.ownerUserId,
+      data.dueDate,
+      data.status,
+      data.blocksIssueClosure ? 1 : 0,
+      completedAt
+    )
+    .first<CorrectiveActionRow>();
+
+  if (!result) {
+    throw new Error("Échec de l'insertion de l'action corrective.");
+  }
+  return result;
+}
+
+export interface CorrectiveActionColumnUpdates {
+  title?: string;
+  description?: string | null;
+  owner_user_id?: number;
+  due_date?: string;
+  status?: string;
+  blocks_issue_closure?: number;
+  result?: string | null;
+  effectiveness_status?: string | null;
+  completed_at?: string | null;
+}
+
+export async function updateCorrectiveActionRow(
+  db: D1Database,
+  id: number,
+  updates: CorrectiveActionColumnUpdates
+): Promise<CorrectiveActionRow | null> {
+  const keys = Object.keys(updates) as (keyof CorrectiveActionColumnUpdates)[];
+  if (keys.length === 0) {
+    return findCorrectiveActionById(db, id);
+  }
+
+  const setClauses = keys.map((k) => `${k} = ?`);
+  setClauses.push("updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')");
+  const values = keys.map((k) => updates[k]);
+
+  const query = `
+    UPDATE corrective_actions
+    SET ${setClauses.join(", ")}
+    WHERE id = ?
+    RETURNING id, issue_id, title, description, owner_user_id, due_date, status,
+              blocks_issue_closure, result, effectiveness_status, completed_at, created_at, updated_at
+  `;
+
+  const result = await db
+    .prepare(query)
+    .bind(...values, id)
+    .first<CorrectiveActionRow>();
+
+  return result || null;
+}

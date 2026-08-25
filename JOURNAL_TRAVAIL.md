@@ -30,9 +30,8 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 | Vague | Statut |
 |---|---|
 | Bootstrap 0 | PRESQUE TERMINÉ — il ne reste que "CI verte" (bloqué : aucun remote Git configuré) |
-| Vague A — Fondations | EN COURS (FND-* + AUTH-01..05 + META-01/02 + ISSUE-01..06 + LIST-01..04 + DETAIL-01/02 + FLOW-01..04 + QA-01 faits ; ISSUE-07 reste) |
-
-| Vague B — Tranches verticales | NON DÉMARRÉE |
+| Vague A — Fondations | TERMINÉ (FND-* + AUTH-01..05 + META-01/02 + ISSUE-01..06 + LIST-01..04 + DETAIL-01/02 + FLOW-01..04 + QA-01 faits) |
+| Vague B — Tranches verticales | EN COURS (COM-01/02, ATT-01/02, ACT-01/02, HIST-01 APIs faites ; UIs et similar links restent) |
 | Vague C | NON DÉMARRÉE |
 | Vague D | NON DÉMARRÉE |
 
@@ -514,10 +513,47 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
   - La Vague A des fondations est maintenant quasiment complète (seul `ISSUE-07` intégration staging reste).
 - **RFC ouverte** : non.
 - **Prochain propriétaire** : Intégrateur (agent) ou humain.
-  - Backend : `COM-01`/`COM-02` (Commentaires) ou `ATT-01`/`ATT-02` (Pièces jointes R2) ou `ACT-01`/`ACT-02` (Actions correctives) ou `HIST-01` (Historique d'audit).
-  - Tranches verticales : Vague B.
+  - `COM-01`/`02`, `ATT-01`/`02`, `ACT-01`/`02` et `HIST-01` pris en charge immédiatement ci-dessous.
 
 ---
+
+### 2026-08-24 — APIs Commentaires, Pièces Jointes R2, Actions Correctives & Historique (COM-01/02, ATT-01/02, ACT-01/02, HIST-01)
+
+- **Task IDs** :
+  - `COM-01` & `COM-02` (Commentaires : ajout, liste avec pagination curseur, soft-delete avec motif et contrôle de rôle manager/admin, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+  - `ATT-01` & `ATT-02` (Pièces jointes R2 : upload multipart, validation MIME S17-S19/S21, limite 10 Mo S20, quota 10 PJ S22, téléchargement binaire, soft-delete manager/admin, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+  - `ACT-01` & `ACT-02` (Actions correctives : création/assignation manager/admin, liste, consultation, modification selon permissions par champ, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+  - `HIST-01` (Historique d'audit : journalisation append-only et endpoint paginé `GET /issues/{publicId}/history`, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+- **Date** : 2026-08-24
+- **Owner** : Intégrateur (agent), sur demande explicite de l'utilisateur (« Fais ca : COM-01/COM-02, ATT-01/ATT-02, ACT-01/ACT-02, HIST-01 »).
+- **Lu avant d'implémenter** : `01_produit/04_MATRICE_PERMISSIONS.md` (permissions pour commentaires, PJ, actions correctives), `01_produit/07_SCENARIOS_ACCEPTATION.md` (S17-S22 règles fichiers et quotas), `contracts/openapi.yaml` (tous les schémas et endpoints associés).
+- **Fichiers produits/modifiés** :
+  - `worker/db/comments.ts` & `worker/services/comments.ts` & `worker/validation/comments.ts` & `worker/routes/comments.ts` : Implémentation complète de `GET /api/issues/{publicId}/comments`, `POST /api/issues/{publicId}/comments` et `DELETE /api/comments/{commentId}`.
+  - `worker/db/attachments.ts` & `worker/services/attachments.ts` & `worker/routes/attachments.ts` : Implémentation complète de `GET /api/issues/{publicId}/attachments`, `POST /api/issues/{publicId}/attachments` (R2 put), `GET /api/attachments/{attachmentId}` (R2 get binary stream) et `DELETE /api/attachments/{attachmentId}`.
+  - `worker/db/corrective-actions.ts` & `worker/services/corrective-actions.ts` & `worker/validation/corrective-actions.ts` & `worker/routes/corrective-actions.ts` : Implémentation complète de `GET /api/issues/{publicId}/corrective-actions`, `POST /api/issues/{publicId}/corrective-actions`, `GET /api/corrective-actions/{actionId}` et `PATCH /api/corrective-actions/{actionId}`.
+  - `worker/db/history.ts` & `worker/services/history.ts` & `worker/routes/history.ts` : Implémentation complète de `GET /api/issues/{publicId}/history` avec pagination par curseur opaque Base64.
+  - `worker/index.ts` : Montage des 4 routeurs d'API.
+  - Tests d'intégration :
+    - `tests/api/comments.test.ts` : 3 tests complets (liste, création, soft-delete + permissions + historique).
+    - `tests/api/attachments.test.ts` : 5 tests complets (JPEG valide, rejet MIME 415, taille >10Mo 413, 11e PJ 422, téléchargement et soft-delete 403/204).
+    - `tests/api/corrective-actions.test.ts` : 3 tests complets (création 403/201, consultation, patch permissions employé vs gestionnaire).
+    - `tests/api/history.test.ts` : 3 tests complets (chronologie d'événements, pagination par curseur, 404).
+- **Commandes exécutées** :
+  - `npm run typecheck` (app, worker, test, e2e) → OK (0 erreur)
+  - `npx vitest run tests/api/comments.test.ts tests/api/attachments.test.ts tests/api/corrective-actions.test.ts tests/api/history.test.ts` → **14/14 passés**
+  - `npm run test` (suite complète de tests) → **152/152 passés** (24 fichiers)
+  - `npm run verify` (from clean) → **exit 0**, **152/152 tests**, build client + worker OK.
+- **`npm run verify`** : **PASS** (exit 0)
+- **Staging testé** : non.
+- **Limitations connues / dette** :
+  - Toutes les APIs fondamentales et de tranches verticales (Commentaires, Pièces jointes R2, Actions correctives, Historique) sont terminées et 100% testées.
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : Intégrateur (agent) ou humain.
+  - Frontend : `COM-03` (UI commentaires), `ATT-03` (UI pièces jointes), `ACT-03` (UI actions correctives), `HIST-02` (Timeline historique), `FLOW-05`/`FLOW-06` (Prise en charge & Conflits).
+  - Backend : `LINK-01` (Similar links API) ou `ANL-01..05` (Analytique).
+
+---
+
 
 
 

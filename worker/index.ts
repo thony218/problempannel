@@ -4,6 +4,10 @@ import { AppError, errorBody, okBody } from "./domain/errors";
 import { sessionRoutes } from "./routes/session";
 import { metaRoutes } from "./routes/meta";
 import { issueRoutes } from "./routes/issues";
+import { commentRoutes } from "./routes/comments";
+import { attachmentRoutes } from "./routes/attachments";
+import { correctiveActionRoutes } from "./routes/corrective-actions";
+import { historyRoutes } from "./routes/history";
 
 export const app = new Hono<AppEnv>();
 
@@ -25,5 +29,9 @@ app.get("/api/health", (c) => c.json(okBody({ status: "ok" })));
 app.route("/api", sessionRoutes);
 app.route("/api", metaRoutes);
 app.route("/api", issueRoutes);
+app.route("/api", commentRoutes);
+app.route("/api", attachmentRoutes);
+app.route("/api", correctiveActionRoutes);
+app.route("/api", historyRoutes);
 
 export default app;
