@@ -51,7 +51,7 @@
 
   --ok: #1c6b4a;   --ok-bg: #e6f3ed;
   --warn: #8a5a00; --warn-bg: #fbf2e0;
-  --crit: #a62c0c; --crit-bg: #fbeae4;
+  --crit: #a62c0c; --crit-bg: #fbeae4; --crit-ink: #ffffff;
   --info: #1d5c86; --info-bg: #e8f1f8;
   --data: #3f6e86;
 
@@ -108,7 +108,7 @@
 
   --ok: #2a7050;   --ok-bg: #e7f2ec;
   --warn: #8a5f14; --warn-bg: #faf1e2;
-  --crit: #a83421; --crit-bg: #faebe7;
+  --crit: #a83421; --crit-bg: #faebe7; --crit-ink: #ffffff;
   --info: #1f6187; --info-bg: #e8f1f6;
   --data: #0e6e77;
 
@@ -165,7 +165,7 @@
 
   --ok: #54c68f;   --ok-bg: #122e22;
   --warn: #e5a93f; --warn-bg: #2e2312;
-  --crit: #ff7a6b; --crit-bg: #33191a;
+  --crit: #ff7a6b; --crit-bg: #33191a; --crit-ink: #06171f;
   --info: #6fc0e8; --info-bg: #102a36;
   --data: #5fb3d9;
 
@@ -222,7 +222,7 @@
 
   --ok: #00623a;   --ok-bg: #e0f2e9;
   --warn: #8a4b00; --warn-bg: #fdf0de;
-  --crit: #c10000; --crit-bg: #fbe3e3;
+  --crit: #c10000; --crit-bg: #fbe3e3; --crit-ink: #ffffff;
   --info: #003c8f; --info-bg: #e3edfb;
   --data: #0040a8;
 
@@ -532,7 +532,9 @@ h1, h2, h3, h4 {
 :root[data-theme="hv"] .btn-primary { box-shadow: 4px 4px 0 var(--ink); border-color: var(--ink); }
 .btn-secondary { background-color: var(--surface); color: var(--ink); border-color: var(--line-strong); }
 .btn-secondary:hover:not(:disabled) { background-color: var(--surface-2); }
-.btn-danger { background-color: var(--crit); color: #ffffff; }
+/* L'encre du bouton danger est propre au theme : sur « nuit », --crit est un
+   corail clair sur lequel du blanc tombe a 2,55:1. */
+.btn-danger { background-color: var(--crit); color: var(--crit-ink); }
 :root[data-theme="hv"] .btn-danger { border-color: var(--ink); }
 .btn-danger:hover:not(:disabled) { filter: brightness(1.1); }
 .btn:disabled { opacity: 0.55; cursor: not-allowed; }
