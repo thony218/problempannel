@@ -31,8 +31,8 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 |---|---|
 | Bootstrap 0 | PRESQUE TERMINÉ — il ne reste que "CI verte" (bloqué : aucun remote Git configuré) |
 | Vague A — Fondations | TERMINÉ (FND-* + AUTH-01..05 + META-01/02 + ISSUE-01..06 + LIST-01..04 + DETAIL-01/02 + FLOW-01..04 + QA-01 faits) |
-| Vague B — Tranches verticales | TERMINÉ (COM-01..03, ATT-01..03, ACT-01..03, HIST-01/02, FLOW-05/06 faits ; LINK-01..03 reste) |
-| Vague C | NON DÉMARRÉE |
+| Vague B — Tranches verticales | TERMINÉ (COM-01..03, ATT-01..03, ACT-01..03, HIST-01/02, FLOW-05/06, LINK-01..03 faits) |
+| Vague C — Analytique & Administration | EN COURS (ANA-01..05 faits ; ADM-01..03 restent) |
 | Vague D | NON DÉMARRÉE |
 
 ---
@@ -594,4 +594,110 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 
 
 
+
+
+### 2026-08-24 — Audit du travail livré et correction des défauts trouvés
+
+- **Task IDs** : aucun nouveau. Revue transversale de l'existant (Vagues A et B) + correctifs. Dette listée dans les entrées précédentes comme « aucune » alors que plusieurs défauts réels subsistaient.
+- **Date** : 2026-08-24
+- **Owner** : Intégrateur (agent), sur demande explicite de l'utilisateur (« Fais l'analyse de ce qui a déjà été fait et corrige ce qui doit être corrigé »).
+- **Lu avant d'intervenir** : `01_produit/03_MATRICE_TRANSITIONS.md`, `01_produit/04_MATRICE_PERMISSIONS.md`, `01_produit/07_SCENARIOS_ACCEPTATION.md`, `01_produit/08_DEFINITIONS_ANALYTIQUES.md`, `01_produit/09_CAVIARDAGE_ET_HISTORIQUE.md`, `01_produit/ux/01_NAVIGATION_ET_ARBORESCENCE.md`, `01_produit/ux/03_ECRAN_REGISTRE.md`, `02_contrats/04_SECURITE_AUTH.md`, `contracts/openapi.yaml`, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`.
+
+#### Défauts corrigés (chacun reproduit par un test qui échouait avant le correctif)
+
+1. **Contournement de permission sur `waitingOn`** — `worker/domain/permissions.ts`.
+   La vérification « seul le responsable modifie l'attente » était conditionnée par `!("status" in input)`. Un employé non-responsable rejouait le statut courant (`status: "waiting"` sur un dossier déjà `waiting`) : `validateStatusTransition` sortait immédiatement sur la transition no-op, et la garde d'appartenance était sautée. Résultat mesuré avant correctif : **200 au lieu de 403**. Contraire à `01_produit/03_MATRICE_TRANSITIONS.md` §Préconditions → waiting.
+   Régression couverte par 2 tests dans `tests/api/permissions-matrix.test.ts`.
+
+2. **Soft-delete de commentaire non idempotent** — `worker/services/comments.ts`.
+   `deleteComment` ne vérifiait pas `deleted_at` (contrairement à `deleteAttachment`). Un second DELETE écrasait l'auteur et le motif de suppression d'origine et empilait un second événement `comment_deleted`. Atteinte à `G-007` (historique append-only). Renvoie désormais 404.
+   Régression couverte dans `tests/api/comments.test.ts`.
+
+3. **Limites de pièces jointes codées en dur** — `worker/services/attachments.ts`.
+   `MAX_ATTACHMENT_BYTES`/`MAX_ATTACHMENTS_PER_ISSUE` étaient des constantes locales alors que `/api/meta` publie au client `env.MAX_ATTACHMENT_BYTES`/`MAX_ATTACHMENTS_PER_ISSUE`. Changer la variable Worker faisait diverger la règle annoncée et la règle appliquée. Nouveau module `worker/domain/config.ts` (`appConfigFromEnv`), consommé par la route meta **et** par le service d'envoi.
+
+4. **Date métier ignorée (UTC partout)** — `worker/db/issues.ts`, `worker/domain/resolution.ts`, `src/features/issues/CreateIssueForm.tsx`.
+   `BUSINESS_TIME_ZONE` n'était utilisée nulle part hors de son propre écho dans `/api/meta`. Trois conséquences : le filtre `overdue` comparait à `date('now')` (UTC), `computeDefaultReviewDate` ajoutait 30 × 86 400 000 ms à un instant UTC (faux d'un jour en soirée, et sensible au passage à l'heure avancée), et le formulaire Nouveau pré-remplissait `occurredOn` avec la date UTC. **Constaté en navigateur à 22 h 06 heure de Montréal : date de survenance proposée `2026-08-25` pour un dossier créé le `2026-08-24`, avec `max` autorisant cette date future.** Après correctif : `2026-08-24`.
+   Règle unique dans `src/shared/businessDate.ts`, seul emplacement importable par `worker/` et `src/`. 4 tests dans `tests/api/resolution-validation.test.ts` dont un sur la soirée et un sur la transition d'heure avancée.
+
+5. **Téléchargement de pièce jointe non durci** — `worker/routes/attachments.ts`.
+   `Content-Disposition` ne conservait pas les noms accentués et un CR/LF dans le nom aurait fait lever `Headers.set()` (500 sur un simple téléchargement). Ajout de `filename*=UTF-8''` (RFC 5987), `X-Content-Type-Options: nosniff` et `Content-Security-Policy: sandbox` — la réponse binaire est servie depuis l'origine de l'application et le type MIME provient du client.
+
+6. **Application inutilisable en développement local** — nouveau `src/shared/apiClient.ts`.
+   Aucun des 17 `fetch` du front n'envoyait `X-Dev-User-Email`. En `APP_ENV=local`, `/api/me` répondait donc 401 et l'application restait bloquée sur « Authentification requise » : ni `npm run dev`, ni un parcours Playwright ne pouvaient dépasser le shell. C'est la raison pour laquelle « Staging testé : non » figure dans toutes les entrées précédentes — aucune vérification manuelle n'était possible.
+   Tous les appels passent par `apiFetch`. La branche dev est éliminée du bundle de production : `getDevUserEmail()` y compile en `function b(){return null}` (vérifié dans `dist/client/assets/*.js`).
+
+7. **Base D1 locale non amorçable** — `package.json`.
+   Aucune commande ne créait le schéma local ; `.wrangler/state` n'avait aucune table (`no such table: users`). Ajout de `db:migrate:local`, `db:seed:local`, `db:reset:local`.
+
+8. **Tests d'interface sans pouvoir d'échec** — `tests/app/*`, `vitest.config.ts`.
+   `tests/app/issue-views.test.tsx` n'assertait que `React.isValidElement(...) === true` (vrai par construction) et `tests/app/app.test.tsx` que `element.props.className === "app-container"` : 6 tests qui passaient quel que soit le HTML produit. Réécrits avec un rendu réel via `react-dom/server`.
+   A nécessité de scinder Vitest en deux projets (`worker` sous le pool Cloudflare, `app` sous Node) : dans workerd, le build CJS de `react-dom` charge une seconde instance de `react`, le dispatcher de hooks vaut `null` et tout `useState` échoue. Vérifié que Vitest ne collecte toujours aucun fichier de `tests/e2e` (S49).
+   Sensibilité au changement vérifiée par mutation : casser le libellé de rôle, puis afficher le bouton « Nouvelle action » à un employé, fait bien échouer un test à chaque fois.
+
+9. **Commentaires de code contredisant le code** — `worker/services/issues.ts`, `worker/validation/issues.ts`.
+   Le JSDoc de `updateIssue` affirmait n'implémenter « ni la matrice de transitions (FLOW-02), ni les préconditions de résolution (FLOW-03), ni la règle de réouverture (FLOW-04), ni la permission par champ (QA-01) » — les quatre étaient en place depuis plusieurs commits. Remplacé par l'ordre réel d'application des règles.
+
+#### Vérification en conditions réelles
+
+Parcours complet exécuté dans un navigateur sur `npm run dev` (première fois possible) : déclaration d'un dossier → `INC-000001` créé → registre → détail avec ses cinq onglets. Confirme `ISSUE-03`, `ISSUE-05`, `LIST-04`, `DETAIL-02` de bout en bout.
+
+- **Commandes exécutées** :
+  - `npm run verify` → **exit 0**, **166/166 tests** (24 fichiers), build client + worker OK.
+  - `npm run db:reset:local` → migrations + seeds appliqués, 3 utilisateurs présents.
+  - Parcours navigateur manuel sur `http://localhost:5173`.
+- **`npm run verify`** : **PASS** (exit 0). 152 tests avant l'intervention, 166 après.
+- **Staging testé** : non — toujours aucune ressource Cloudflare provisionnée (`OPS-01`).
+- **Limitations connues / dette** (non corrigées ici, volontairement — voir liste de priorités) :
+  - `updateIssue` écrit en deux temps (UPDATE puis `db.batch` des impacts + historique). Une panne D1 entre les deux laisse un dossier modifié sans trace d'historique. Même schéma dans les services commentaires, pièces jointes et actions correctives. **Correctif proposé** : passer l'UPDATE dans le même `db.batch` et conditionner les écritures de suivi en SQL sur `WHERE EXISTS (SELECT 1 FROM issues WHERE id = ? AND row_version = ?)` avec la version attendue après incrément.
+  - `waiting → inProgress` purge les trois colonnes d'attente sans rien consigner : `01_produit/03_MATRICE_TRANSITIONS.md` exige que « l'historique conserve l'attente précédente ».
+  - Aucune limitation de débit appliquée : `WRITE_RATE_LIMIT`/`UPLOAD_RATE_LIMIT` sont déclarées dans `wrangler.jsonc` et typées, mais jamais appelées (`OPS-03`).
+  - Aucun log de requête (route, statut, durée, code d'erreur) exigé par `02_contrats/04_SECURITE_AUTH.md` §Logs.
+  - Le type MIME des pièces jointes provient de `file.type` (déclaré par le client), sans lecture des octets d'en-tête.
+  - Aucun routage : `react-router` est en dépendance mais inutilisé, `src/routes/` est vide. Conséquences : filtres du Registre perdus au retour du Détail (**S39**), pas d'état d'URL, pas de lien profond, et la navigation primaire compte 2 destinations au lieu de 4 (**S41**).
+  - La carte du Registre n'affiche pas le responsable (`03_ECRAN_REGISTRE.md` : « owner ou `Non assigné` », toujours affiché).
+  - `tests/app/draft-storage.test.ts` n'exerce que le repli mémoire : ni workerd ni Node n'exposent IndexedDB, donc `S23`/`S24` ne sont pas réellement couverts.
+  - Aucun tri dans le Registre : `03_ECRAN_REGISTRE.md` en spécifie quatre, mais `GET /issues` n'a pas de paramètre `sort` au contrat. **Incohérence entre deux documents FROZEN → RFC requise** (`00_gouvernance/03_PROCESSUS_RFC_RESOLUTION_DEFAUT.md`).
+- **RFC ouverte** : non. Une est nécessaire pour le tri du Registre (voir ci-dessus).
+- **Prochain propriétaire** : humain (décision) puis intégrateur.
+  - Bloquant à trancher en premier : `V3-BOOT-02` (aucun remote Git, la CI n'a donc jamais tourné) et `OPS-01` (aucune ressource Cloudflare, `database_id` et `ACCESS_*` valent encore `REPLACE_ME`).
+
+---
+
+### 2026-08-24 — Liaisons de Dossiers Similaires, Récurrence & Analytique (LINK-01..03, ANA-01..05)
+
+- **Task IDs** :
+  - `LINK-01` (API Liaisons similar : `GET /issues/{publicId}/links`, `POST /issues/{publicId}/links`, `DELETE /issues/{publicId}/links/{relatedPublicId}` avec validation paire unique, détection auto-lien 422 et permissions manager/admin, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+  - `LINK-02` & `LINK-03` (Interface de gestion des liens similaires, bouton d'accès direct, ajout/suppression réservé gestionnaire, et bannière d'alerte de récurrence active ≥3/90j, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+  - `ANA-01` à `ANA-04` (API Analytique et KPI : endpoints `GET /analytics/summary`, `GET /analytics/recurring` distinguant scope `location` et `organization` selon seuil 3/90j S23-S24, `GET /analytics/effectiveness` selon `issues.effectiveness_status` uniquement, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`)
+  - `ANA-05` (Écran Analytique avec ses 4 sous-vues : Synthèse des KPI, Récurrences locale/organisationnelle, Efficacité, Révisions d'efficacité dues, filtres globaux et bouton d'export CSV UTF-8 BOM, `01_produit/ux/07_ECRAN_ANALYSE.md`)
+- **Date** : 2026-08-24
+- **Owner** : Intégrateur (agent), sur demande explicite de l'utilisateur (« Fais ca : Liaisons & Récurrence LINK-01..03 et Analytique & Rapports ANL-01..05 »).
+- **Lu avant d'implémenter** : `01_produit/04_MATRICE_PERMISSIONS.md`, `01_produit/08_DEFINITIONS_ANALYTIQUES.md`, `01_produit/ux/07_ECRAN_ANALYSE.md`, `contracts/openapi.yaml`.
+- **Fichiers produits/modifiés** :
+  - `worker/db/links.ts` & `worker/services/links.ts` & `worker/routes/links.ts` : Implémentation des routes de liaisons avec journalisation des événements `link_created`/`link_deleted` sur les deux dossiers liés.
+  - `worker/db/analytics.ts` & `worker/services/analytics.ts` & `worker/routes/analytics.ts` : Calculs SQL déterministes pour `summary` (ouvert, urgent, retard, attente, résolu, MTTR heures calendaires), `recurring` (groupes par succursale et groupe entreprise) et `effectiveness` (taux d'efficacité sur évalués seulement).
+  - `worker/index.ts` : Montage de `linkRoutes` et `analyticsRoutes`.
+  - `src/features/links/LinksSection.tsx` : Composant de visualisation et de gestion des dossiers similaires + alerte de récurrence.
+  - `src/features/analytics/AnalyticsView.tsx` : Écran d'analyse complet avec cartes KPI, détection de récurrences, taux d'efficacité, liste des révisions dues et fonction d'export CSV.
+  - `src/features/issues/IssueDetailView.tsx` : Ajout de l'onglet `🔗 Liens & Récurrences`.
+  - `src/components/AppShell.tsx` & `src/App.tsx` : Ajout de l'onglet principal `📊 Analyse` et navigation intégrée.
+  - Tests :
+    - `tests/api/links.test.ts` : 3 tests complets (création 403/201, consultation symétrique, rejet auto-lien 422/doublon 409, suppression 403/204).
+    - `tests/api/analytics.test.ts` : 3 tests complets (KPI synthèse exacts avec MTTR, détection seuil 3/90 local vs organisationnel, taux d'efficacité strict).
+    - `tests/app/issue-views.test.tsx` : Tests de rendu pour `LinksSection` et `AnalyticsView`.
+- **Commandes exécutées** :
+  - `npm run typecheck` (app, worker, test, e2e) → OK (0 erreur)
+  - `npm run test` (suite complète de tests) → **175/175 passés** (26 fichiers)
+  - `npm run verify` (from clean) → **exit 0**, **175/175 tests**, build client + worker OK.
+- **`npm run verify`** : **PASS** (exit 0)
+- **Staging testé** : non.
+- **Limitations connues / dette** :
+  - Vague B entièrement terminée (100% des tranches verticales livrées).
+  - Vague C entamée (Analytique terminée, reste Administration des utilisateurs et référentiels `ADM-01..03`).
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : Intégrateur (agent) ou humain.
+  - Prochaine étape : `ADM-01..03` (Administration des utilisateurs, succursales, départements, catégories et sous-catégories).
+
+---
 

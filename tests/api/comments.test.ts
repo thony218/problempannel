@@ -204,4 +204,56 @@ describe("COM-01 & COM-02: API des commentaires", () => {
     ).all();
     expect(historyRows.results).toHaveLength(1);
   });
+/**
+   * G-007 (historique append-only) : un second DELETE ne doit pas réécrire
+   * silencieusement l'auteur/le motif de la suppression d'origine ni empiler
+   * un deuxième événement `comment_deleted` pour le même commentaire.
+   * Aligne le comportement sur celui des pièces jointes (`deleteAttachment`).
+   */
+  it("rejects deleting an already soft-deleted comment without overwriting the original trace (404)", async () => {
+    const { publicId } = await createIssue();
+
+    const createRes = await app.request(
+      `http://local/api/issues/${publicId}/comments`,
+      {
+        method: "POST",
+        headers: EMPLOYEE_HEADER,
+        body: JSON.stringify({ body: "Commentaire à supprimer une seule fois." }),
+      },
+      env
+    );
+    const commentId = ((await createRes.json()) as any).data.id;
+
+    const firstDelete = await app.request(
+      `http://local/api/comments/${commentId}`,
+      {
+        method: "DELETE",
+        headers: MANAGER_HEADER,
+        body: JSON.stringify({ reason: "Motif initial de suppression." }),
+      },
+      env
+    );
+    expect(firstDelete.status).toBe(204);
+
+    const secondDelete = await app.request(
+      `http://local/api/comments/${commentId}`,
+      {
+        method: "DELETE",
+        headers: MANAGER_HEADER,
+        body: JSON.stringify({ reason: "Motif de remplacement frauduleux." }),
+      },
+      env
+    );
+    expect(secondDelete.status).toBe(404);
+
+    const row = await env.DB.prepare("SELECT delete_reason FROM comments WHERE id = ?")
+      .bind(commentId)
+      .first<{ delete_reason: string }>();
+    expect(row!.delete_reason).toBe("Motif initial de suppression.");
+
+    const historyRows = await env.DB.prepare(
+      "SELECT event_type FROM issue_history WHERE event_type = 'comment_deleted'"
+    ).all();
+    expect(historyRows.results).toHaveLength(1);
+  });
 });

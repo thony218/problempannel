@@ -1,5 +1,9 @@
 import React from "react";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { renderToStaticMarkup } from "react-dom/server";
+import type { components } from "../../src/shared/api-types.generated";
+import * as authModule from "../../src/features/auth/AuthContext";
+import type { AuthContextValue } from "../../src/features/auth/AuthContext";
 import { IssueList } from "../../src/features/issues/IssueList";
 import { IssueDetailView } from "../../src/features/issues/IssueDetailView";
 import { CommentsSection } from "../../src/features/comments/CommentsSection";
@@ -7,93 +11,277 @@ import { AttachmentsSection } from "../../src/features/attachments/AttachmentsSe
 import { CorrectiveActionsSection } from "../../src/features/corrective-actions/CorrectiveActionsSection";
 import { HistoryTimelineSection } from "../../src/features/history/HistoryTimelineSection";
 import { EditIssueModal } from "../../src/features/issues/EditIssueModal";
+import { LinksSection } from "../../src/features/links/LinksSection";
+import { AnalyticsView } from "../../src/features/analytics/AnalyticsView";
 
-describe("Frontend Views (LIST-04, DETAIL-02, COM-03, ATT-03, ACT-03, HIST-02, FLOW-05/06)", () => {
-  it("creates valid React elements for all issue detail sub-components", () => {
-    const listElement = React.createElement(IssueList, {
-      onSelectIssue: () => {},
-      onNewIssue: () => {},
-    });
-    expect(React.isValidElement(listElement)).toBe(true);
+/**
+ * Rendu HTML réel des écrans (LIST-04, DETAIL-02, COM-03, ATT-03, ACT-03,
+ * HIST-02, FLOW-05/06).
+ *
+ * Remplace une version antérieure dont les assertions
+ * (`React.isValidElement(...) === true`) étaient vraies par construction :
+ * `React.createElement` renvoie toujours un élément valide, y compris pour un
+ * composant cassé. Ces tests-ci portent sur le HTML produit.
+ *
+ * `renderToStaticMarkup` n'exécute pas les effets : les sections qui chargent
+ * leurs données au montage sont donc observées dans leur **premier** rendu.
+ * C'est exactement ce qu'il faut pour vérifier les états de chargement et les
+ * éléments conditionnés par le rôle, qui eux ne dépendent d'aucun effet.
+ * La vérification des états chargés relève du parcours Playwright (QA-04).
+ */
 
-    const detailElement = React.createElement(IssueDetailView, {
-      publicId: "INC-000001",
-      onBack: () => {},
-    });
-    expect(React.isValidElement(detailElement)).toBe(true);
+type Role = components["schemas"]["Role"];
+type Issue = components["schemas"]["Issue"];
 
-    const commentsElement = React.createElement(CommentsSection, {
-      publicId: "INC-000001",
-    });
-    expect(React.isValidElement(commentsElement)).toBe(true);
+const META: AuthContextValue["meta"] = {
+  locations: [{ id: 1, code: "MTL", label: "Montréal", active: true, sortOrder: 1 }],
+  departments: [{ id: 1, code: "sales", label: "Ventes", active: true, sortOrder: 1 }],
+  categories: [{ id: 1, code: "recv", label: "Réception", active: true, sortOrder: 1 }],
+  subcategories: [{ id: 1, code: "price", label: "Prix", active: true, sortOrder: 1, parentId: 1 }],
+  impactTypes: [{ id: 1, code: "time_lost", label: "Temps perdu", active: true, sortOrder: 1 }],
+  config: {
+    businessTimeZone: "America/Toronto",
+    maxAttachmentBytes: 10485760,
+    maxAttachmentsPerIssue: 10,
+    recurringWindowDays: 90,
+    recurringMinCount: 3,
+  },
+};
 
-    const attachmentsElement = React.createElement(AttachmentsSection, {
-      publicId: "INC-000001",
-    });
-    expect(React.isValidElement(attachmentsElement)).toBe(true);
+function mockAuthAs(role: Role, userId = 1): void {
+  vi.spyOn(authModule, "useAuth").mockReturnValue({
+    user: {
+      id: userId,
+      email: `${role}@example.test`,
+      displayName: `Utilisateur ${role}`,
+      role,
+      active: true,
+      defaultLocationId: null,
+      defaultDepartmentId: null,
+    },
+    meta: META,
+    loading: false,
+    error: null,
+    refresh: async () => {},
+  });
+}
 
-    const actionsElement = React.createElement(CorrectiveActionsSection, {
-      publicId: "INC-000001",
-    });
-    expect(React.isValidElement(actionsElement)).toBe(true);
+function baseIssue(overrides: Partial<Issue> = {}): Issue {
+  return {
+    publicId: "INC-000001",
+    rowVersion: 1,
+    occurredOn: "2026-08-20",
+    locationId: 1,
+    departmentId: null,
+    categoryId: 1,
+    subcategoryId: null,
+    description: "Description de test suffisamment longue.",
+    priority: "normal",
+    status: "new",
+    createdByUserId: 1,
+    ownerUserId: null,
+    dueDate: null,
+    waitingOn: null,
+    causeStatus: null,
+    causeSummary: null,
+    immediateSolution: null,
+    permanentCorrectionType: null,
+    permanentCorrectionSummary: null,
+    finalResult: null,
+    preventionLearning: null,
+    resolvedAt: null,
+    resolvedByUserId: null,
+    effectivenessStatus: null,
+    effectivenessReviewDate: null,
+    createdAt: "2026-08-20T10:00:00.000Z",
+    updatedAt: "2026-08-20T10:00:00.000Z",
+    ...overrides,
+  } as Issue;
+}
 
-    const historyElement = React.createElement(HistoryTimelineSection, {
-      publicId: "INC-000001",
-    });
-    expect(React.isValidElement(historyElement)).toBe(true);
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
-    const editModalElement = React.createElement(EditIssueModal, {
-      issue: {
-        publicId: "INC-000001",
-        rowVersion: 1,
-        occurredOn: "2026-08-20",
-        locationId: 1,
-        departmentId: null,
-        categoryId: 1,
-        subcategoryId: null,
-        description: "Test issue",
-        priority: "normal",
-        status: "new",
-        createdByUserId: 1,
-        ownerUserId: null,
-        dueDate: null,
-        waitingOn: null,
-        causeStatus: null,
-        causeSummary: null,
-        immediateSolution: null,
-        permanentCorrectionType: null,
-        permanentCorrectionSummary: null,
-        finalResult: null,
-        preventionLearning: null,
-        resolvedAt: null,
-        resolvedByUserId: null,
-        effectivenessStatus: null,
-        effectivenessReviewDate: null,
-        createdAt: "2026-08-20T10:00:00.000Z",
-        updatedAt: "2026-08-20T10:00:00.000Z",
-      },
-      etag: '"test-etag"',
-      onClose: () => {},
-      onSuccess: async () => {},
-      onReload: async () => {},
-    });
-    expect(React.isValidElement(editModalElement)).toBe(true);
+describe("Registre et détail — premier rendu (LIST-04, DETAIL-02)", () => {
+  it("renders the registry with its search field and loading state", () => {
+    mockAuthAs("employee");
+    const html = renderToStaticMarkup(
+      <IssueList onSelectIssue={() => {}} onNewIssue={() => {}} />
+    );
+
+    expect(html).toContain('data-testid="issue-list-container"');
+    expect(html).toContain('data-testid="search-input"');
+    expect(html).toContain('data-testid="list-loading"');
+    expect(html).toContain("Chargement des dossiers");
   });
 
-  it("constructs correct query parameters for filtering in registry", () => {
-    const params = new URLSearchParams();
-    params.set("limit", "20");
-    params.set("q", "panne réseau");
-    params.set("status", "inProgress");
-    params.set("locationId", "1");
-    params.set("categoryId", "2");
-    params.set("priority", "urgent");
+  it("renders the detail view loading state naming the requested file", () => {
+    mockAuthAs("employee");
+    const html = renderToStaticMarkup(
+      <IssueDetailView publicId="INC-000042" onBack={() => {}} />
+    );
 
-    const qs = params.toString();
-    expect(qs).toContain("q=panne+r%C3%A9seau");
-    expect(qs).toContain("status=inProgress");
-    expect(qs).toContain("locationId=1");
-    expect(qs).toContain("categoryId=2");
-    expect(qs).toContain("priority=urgent");
+    expect(html).toContain('data-testid="detail-loading"');
+    expect(html).toContain("INC-000042");
   });
 });
+
+describe("Sections du détail — premier rendu (COM-03, ATT-03, ACT-03, HIST-02)", () => {
+  it("renders each section shell with its own loading message", () => {
+    mockAuthAs("employee");
+
+    const comments = renderToStaticMarkup(<CommentsSection publicId="INC-000001" />);
+    expect(comments).toContain("Chargement des commentaires");
+
+    const attachments = renderToStaticMarkup(<AttachmentsSection publicId="INC-000001" />);
+    expect(attachments).toContain('data-testid="attachments-section"');
+    expect(attachments).toContain("Chargement des pièces jointes");
+
+    const actions = renderToStaticMarkup(<CorrectiveActionsSection publicId="INC-000001" />);
+    expect(actions).toContain('data-testid="corrective-actions-section"');
+    expect(actions).toContain("Chargement des actions");
+
+    const history = renderToStaticMarkup(<HistoryTimelineSection publicId="INC-000001" />);
+    expect(history).toContain('data-testid="history-timeline-section"');
+    // L'apostrophe est échappée par le rendu HTML (`&#x27;`).
+    expect(history).toContain("Chargement de l");
+    expect(history).toContain("historique...");
+  });
+
+  /**
+   * 01_produit/04_MATRICE_PERMISSIONS.md : « Créer/assigner action » est
+   * réservé aux gestionnaires et administrateurs. Masquer le bouton ne remplace
+   * pas le contrôle serveur (G-006), mais l'afficher à un employé le conduirait
+   * droit à un 403.
+   */
+  it("hides the create-action button from an employee and shows it to a manager", () => {
+    mockAuthAs("employee");
+    const asEmployee = renderToStaticMarkup(<CorrectiveActionsSection publicId="INC-000001" />);
+    expect(asEmployee).not.toContain('data-testid="btn-open-create-action"');
+
+    vi.restoreAllMocks();
+    mockAuthAs("manager");
+    const asManager = renderToStaticMarkup(<CorrectiveActionsSection publicId="INC-000001" />);
+    expect(asManager).toContain('data-testid="btn-open-create-action"');
+  });
+});
+
+describe("Modale d'édition — permissions et conflit (FLOW-05, FLOW-06)", () => {
+  it("exposes status and priority controls to a manager", () => {
+    mockAuthAs("manager", 9);
+    const html = renderToStaticMarkup(
+      <EditIssueModal
+        issue={baseIssue()}
+        etag="issue-1-v1"
+        onClose={() => {}}
+        onSuccess={async () => {}}
+        onReload={async () => {}}
+      />
+    );
+
+    expect(html).toContain('data-testid="form-edit-issue"');
+    expect(html).toContain('data-testid="select-edit-status"');
+    expect(html).toContain('data-testid="select-edit-priority"');
+    expect(html).toContain("INC-000001");
+  });
+
+  /**
+   * Un employé — même créateur du dossier — ne doit voir ni le sélecteur de
+   * statut ni celui de priorité : ces champs sont réservés au management.
+   */
+  it("hides manager-only controls from the creating employee", () => {
+    mockAuthAs("employee", 1);
+    const html = renderToStaticMarkup(
+      <EditIssueModal
+        issue={baseIssue({ createdByUserId: 1 })}
+        etag="issue-1-v1"
+        onClose={() => {}}
+        onSuccess={async () => {}}
+        onReload={async () => {}}
+      />
+    );
+
+    expect(html).toContain('data-testid="form-edit-issue"');
+    expect(html).not.toContain('data-testid="select-edit-status"');
+    expect(html).not.toContain('data-testid="select-edit-priority"');
+  });
+
+  /**
+   * FLOW-04 : le motif de réouverture n'apparaît que pour la transition
+   * resolved -> inProgress, jamais sur un dossier qui n'est pas résolu.
+   */
+  it("does not ask for a reopen reason on a file that is not resolved", () => {
+    mockAuthAs("manager", 9);
+    const html = renderToStaticMarkup(
+      <EditIssueModal
+        issue={baseIssue({ status: "inProgress", subcategoryId: 1 })}
+        etag="issue-1-v2"
+        onClose={() => {}}
+        onSuccess={async () => {}}
+        onReload={async () => {}}
+      />
+    );
+
+    expect(html).not.toContain('data-testid="input-reopen-reason"');
+  });
+
+  /**
+   * FLOW-06 / S40 : la bannière de conflit n'est affichée qu'après un 409.
+   * Au premier rendu elle doit être absente, sinon l'utilisateur croirait à un
+   * conflit permanent.
+   */
+  it("does not show the conflict banner before any 409", () => {
+    mockAuthAs("manager", 9);
+    const html = renderToStaticMarkup(
+      <EditIssueModal
+        issue={baseIssue()}
+        etag="issue-1-v1"
+        onClose={() => {}}
+        onSuccess={async () => {}}
+        onReload={async () => {}}
+      />
+    );
+
+    expect(html).not.toContain('data-testid="conflict-banner"');
+    expect(html).not.toContain('data-testid="btn-reload-conflict"');
+  });
+});
+
+describe("LINK-02 / LINK-03: Rendu de la section Liens & Récurrences", () => {
+  it("renders manager controls to add links", () => {
+    mockAuthAs("manager", 9);
+    const html = renderToStaticMarkup(
+      <LinksSection publicId="INC-000001" subcategoryId={1} locationId={1} />
+    );
+
+    expect(html).toContain('data-testid="links-section"');
+    expect(html).toContain('data-testid="form-add-link"');
+    expect(html).toContain('data-testid="input-link-public-id"');
+  });
+
+  it("hides add link form for employees", () => {
+    mockAuthAs("employee", 1);
+    const html = renderToStaticMarkup(
+      <LinksSection publicId="INC-000001" subcategoryId={1} locationId={1} />
+    );
+
+    expect(html).toContain('data-testid="links-section"');
+    expect(html).not.toContain('data-testid="form-add-link"');
+  });
+});
+
+describe("ANA-05: Rendu du tableau de bord Analytics", () => {
+  it("renders all analytics subviews and export button", () => {
+    mockAuthAs("manager", 9);
+    const html = renderToStaticMarkup(<AnalyticsView />);
+
+    expect(html).toContain('data-testid="analytics-view"');
+    expect(html).toContain('data-testid="btn-export-csv"');
+    expect(html).toContain('data-testid="subtab-summary"');
+    expect(html).toContain('data-testid="subtab-recurring"');
+    expect(html).toContain('data-testid="subtab-effectiveness"');
+    expect(html).toContain('data-testid="subtab-reviews"');
+  });
+});
+

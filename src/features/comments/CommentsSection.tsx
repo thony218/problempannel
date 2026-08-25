@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../auth/AuthContext";
 import type { components } from "../../shared/api-types.generated";
+import { apiFetch } from "../../shared/apiClient";
 
 export type ApiComment = components["schemas"]["Comment"];
 
@@ -26,7 +27,7 @@ export function CommentsSection({ publicId }: CommentsSectionProps) {
 
   const fetchComments = useCallback(async () => {
     try {
-      const res = await fetch(`/api/issues/${publicId}/comments`, {
+      const res = await apiFetch(`/api/issues/${publicId}/comments`, {
         headers: { Accept: "application/json" },
       });
       if (!res.ok) {
@@ -55,7 +56,7 @@ export function CommentsSection({ publicId }: CommentsSectionProps) {
     setSubmitError(null);
 
     try {
-      const res = await fetch(`/api/issues/${publicId}/comments`, {
+      const res = await apiFetch(`/api/issues/${publicId}/comments`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ body: newBody.trim() }),
@@ -86,7 +87,7 @@ export function CommentsSection({ publicId }: CommentsSectionProps) {
     setDeleteError(null);
 
     try {
-      const res = await fetch(`/api/comments/${deleteTargetId}`, {
+      const res = await apiFetch(`/api/comments/${deleteTargetId}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({ reason: deleteReason.trim() }),

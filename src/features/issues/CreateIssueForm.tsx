@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from "react";
 import { useAuth } from "../auth/AuthContext";
 import type { components } from "../../shared/api-types.generated";
 import { loadDraft, saveDraft, clearDraft, type DraftAttachment } from "./draftStorage";
+import { apiFetch } from "../../shared/apiClient";
+import { businessToday } from "../../shared/businessDate";
 
 export type Priority = components["schemas"]["Priority"];
 export type CreateIssueRequest = components["schemas"]["CreateIssueRequest"];
@@ -28,7 +30,11 @@ export interface CreateIssueFormProps {
 export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
   const { user, meta } = useAuth();
 
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // `new Date().toISOString()` donne la date **UTC** : passé 19 h ou 20 h à
+  // Montréal, elle vaut déjà le lendemain — le formulaire proposerait alors une
+  // date de survenance dans le futur et `max` la laisserait passer. Le fuseau
+  // métier vient de /api/meta (`config.businessTimeZone`).
+  const todayStr = businessToday(meta?.config.businessTimeZone ?? "America/Toronto");
 
   const [occurredOn, setOccurredOn] = useState<string>(todayStr);
   const [locationId, setLocationId] = useState<number | "">(user?.defaultLocationId ?? "");
@@ -264,7 +270,7 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
         payload.subcategoryId = Number(subcategoryId);
       }
 
-      const res = await fetch("/api/issues", {
+      const res = await apiFetch("/api/issues", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "../auth/AuthContext";
 import type { components } from "../../shared/api-types.generated";
+import { apiFetch } from "../../shared/apiClient";
 
 export type Issue = components["schemas"]["Issue"];
 export type IssueStatus = components["schemas"]["IssueStatus"];
@@ -70,7 +71,7 @@ export function IssueList({ onSelectIssue, onNewIssue }: IssueListProps) {
           params.set("priority", priority);
         }
 
-        const res = await fetch(`/api/issues?${params.toString()}`, {
+        const res = await apiFetch(`/api/issues?${params.toString()}`, {
           headers: { Accept: "application/json" },
         });
 

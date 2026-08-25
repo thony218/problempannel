@@ -206,6 +206,72 @@ describe("QA-01: Matrice exhaustive des permissions par champ (01_produit/04_MAT
     });
   });
 
+
+  describe("Rôle Employé — Attente (waitingOn) réservée au responsable", () => {
+    /**
+     * Régression : un employé non-responsable ne doit pas pouvoir changer la
+     * cible d'attente d'un dossier, y compris en joignant le statut courant à
+     * sa requête (`status` inchangé = transition no-op).
+     * Cf. 01_produit/03_MATRICE_TRANSITIONS.md §Préconditions → waiting.
+     */
+    it("rejects a non-owner employee changing waitingOn by replaying the current status (403)", async () => {
+      const { publicId, etag } = await createIssue(CREATOR_EMPLOYEE_HEADER);
+
+      // Le manager met le dossier en attente et désigne le créateur responsable.
+      const waitingRes = await patchIssue(
+        publicId,
+        {
+          status: "waiting",
+          subcategoryId,
+          ownerUserId: creatorId,
+          waitingOn: { type: "supplier", label: "Fournisseur A" },
+        },
+        etag,
+        MANAGER_HEADER
+      );
+      expect(waitingRes.status).toBe(200);
+      const waitingEtag = waitingRes.headers.get("ETag") as string;
+
+      // Un autre employé rejoue le statut courant pour glisser un waitingOn.
+      const res = await patchIssue(
+        publicId,
+        { status: "waiting", waitingOn: { type: "supplier", label: "Fournisseur pirate" } },
+        waitingEtag,
+        OTHER_EMPLOYEE_HEADER
+      );
+      expect(res.status).toBe(403);
+      const body = (await res.json()) as any;
+      expect(body.error.code).toBe("FORBIDDEN");
+    });
+
+    it("allows the designated owner to update waitingOn", async () => {
+      const { publicId, etag } = await createIssue(CREATOR_EMPLOYEE_HEADER);
+
+      const waitingRes = await patchIssue(
+        publicId,
+        {
+          status: "waiting",
+          subcategoryId,
+          ownerUserId: creatorId,
+          waitingOn: { type: "supplier", label: "Fournisseur A" },
+        },
+        etag,
+        MANAGER_HEADER
+      );
+      const waitingEtag = waitingRes.headers.get("ETag") as string;
+
+      const res = await patchIssue(
+        publicId,
+        { waitingOn: { type: "supplier", label: "Fournisseur B" } },
+        waitingEtag,
+        CREATOR_EMPLOYEE_HEADER
+      );
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as any;
+      expect(body.data.issue.waitingOn.label).toBe("Fournisseur B");
+    });
+  });
+
   describe("Rôles Manager et Admin — Droits complets d'édition", () => {
     it("allows manager to change priority, ownerUserId, dueDate and cause details", async () => {
       const { publicId, etag } = await createIssue(CREATOR_EMPLOYEE_HEADER);

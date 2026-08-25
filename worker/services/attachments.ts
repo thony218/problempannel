@@ -13,6 +13,7 @@ import {
   type AttachmentRow,
 } from "../db/attachments";
 import { insertHistoryEventStatement } from "../db/history";
+import type { AppConfig } from "../domain/config";
 
 export type Role = components["schemas"]["Role"];
 
@@ -24,9 +25,6 @@ const ALLOWED_CONTENT_TYPES = new Set([
   "image/heif",
   "application/pdf",
 ]);
-
-const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10 MiB
-const MAX_ATTACHMENTS_PER_ISSUE = 10;
 
 export async function listAttachments(
   db: D1Database,
@@ -42,12 +40,18 @@ export async function listAttachments(
   return rows.map(mapAttachmentRow);
 }
 
+/**
+ * Les limites viennent de la configuration Worker (`AppConfig`), la même que
+ * celle publiée par `/api/meta` — jamais de constante locale, sinon le serveur
+ * refuserait à 10 Mo un fichier que le client croit autorisé à 20 Mo (S20/S22).
+ */
 export async function uploadAttachment(
   db: D1Database,
   bucket: R2Bucket,
   publicId: string,
   file: File,
-  actorUserId: number
+  actorUserId: number,
+  config: Pick<AppConfig, "maxAttachmentBytes" | "maxAttachmentsPerIssue">
 ): Promise<ApiAttachment | null> {
   const issueId = parsePublicId(publicId);
   if (issueId === null) return null;
@@ -56,10 +60,11 @@ export async function uploadAttachment(
   if (!issue) return null;
 
   // 1. Validation de la taille (S20)
-  if (file.size > MAX_ATTACHMENT_BYTES) {
+  if (file.size > config.maxAttachmentBytes) {
+    const maxMegabytes = Math.round(config.maxAttachmentBytes / (1024 * 1024));
     throw new AppError(
       "FILE_TOO_LARGE",
-      `Le fichier dépasse la taille maximale autorisée (${MAX_ATTACHMENT_BYTES} octets / 10 Mo).`
+      `Le fichier dépasse la taille maximale autorisée (${config.maxAttachmentBytes} octets / ${maxMegabytes} Mo).`
     );
   }
 
@@ -74,10 +79,10 @@ export async function uploadAttachment(
 
   // 3. Validation du quota par issue (S22)
   const currentCount = await countActiveAttachmentsByIssueId(db, issueId);
-  if (currentCount >= MAX_ATTACHMENTS_PER_ISSUE) {
+  if (currentCount >= config.maxAttachmentsPerIssue) {
     throw new AppError(
       "ATTACHMENT_LIMIT_REACHED",
-      `Limite maximale de ${MAX_ATTACHMENTS_PER_ISSUE} pièces jointes par dossier atteinte.`
+      `Limite maximale de ${config.maxAttachmentsPerIssue} pièces jointes par dossier atteinte.`
     );
   }
 

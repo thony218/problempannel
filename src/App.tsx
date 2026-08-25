@@ -1,15 +1,16 @@
 import React, { useState } from "react";
 import { AuthProvider } from "./features/auth/AuthContext";
-import { AppShell } from "./components/AppShell";
+import { AppShell, type NavTab } from "./components/AppShell";
 import { CreateIssueForm } from "./features/issues/CreateIssueForm";
 import { IssueList } from "./features/issues/IssueList";
 import { IssueDetailView } from "./features/issues/IssueDetailView";
+import { AnalyticsView } from "./features/analytics/AnalyticsView";
 
 function AppContent() {
-  const [currentTab, setCurrentTab] = useState<"new" | "list">("new");
+  const [currentTab, setCurrentTab] = useState<NavTab>("new");
   const [selectedIssuePublicId, setSelectedIssuePublicId] = useState<string | null>(null);
 
-  const handleTabChange = (tab: "new" | "list") => {
+  const handleTabChange = (tab: NavTab) => {
     setCurrentTab(tab);
     setSelectedIssuePublicId(null);
   };
@@ -29,18 +30,22 @@ function AppContent() {
         <IssueDetailView
           publicId={selectedIssuePublicId}
           onBack={handleBackToList}
+          onSelectIssue={handleSelectIssue}
         />
       ) : currentTab === "new" ? (
         <CreateIssueForm
           onSuccess={(created) => {
-            // Permet d'accéder au dossier ou de rester sur la confirmation
+            // Après création, possibilité de consulter ou basculer
+            setSelectedIssuePublicId(created.publicId);
           }}
         />
-      ) : (
+      ) : currentTab === "list" ? (
         <IssueList
           onSelectIssue={handleSelectIssue}
           onNewIssue={() => handleTabChange("new")}
         />
+      ) : (
+        <AnalyticsView onSelectIssue={handleSelectIssue} />
       )}
     </AppShell>
   );

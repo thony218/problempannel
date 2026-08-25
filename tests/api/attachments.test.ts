@@ -221,4 +221,44 @@ describe("ATT-01 & ATT-02: Upload et gestion des pièces jointes R2 (S17-S22)", 
     );
     expect(downloadRes.status).toBe(404);
   });
+/**
+   * Régression : un nom de fichier accentué ne doit pas être mutilé dans
+   * `Content-Disposition`, et l'en-tête ne doit jamais contenir de CR/LF
+   * (`Headers.set` lève dessus, ce qui transformerait un téléchargement en
+   * 500). Vérifie aussi le durcissement de la réponse binaire, servie depuis
+   * l'origine même de l'application.
+   */
+  it("serves downloads with hardened headers and an RFC 5987 filename", async () => {
+    const { publicId } = await createIssue();
+
+    const formData = new FormData();
+    const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xe0])], "reçu été.jpg", {
+      type: "image/jpeg",
+    });
+    formData.append("file", file);
+
+    const uploadRes = await app.request(
+      `http://local/api/issues/${publicId}/attachments`,
+      { method: "POST", headers: EMPLOYEE_HEADER, body: formData },
+      env
+    );
+    expect(uploadRes.status).toBe(201);
+    const attachmentId = ((await uploadRes.json()) as any).data.id;
+
+    const downloadRes = await app.request(
+      `http://local/api/attachments/${attachmentId}`,
+      { headers: EMPLOYEE_HEADER },
+      env
+    );
+
+    expect(downloadRes.status).toBe(200);
+    expect(downloadRes.headers.get("X-Content-Type-Options")).toBe("nosniff");
+    expect(downloadRes.headers.get("Content-Security-Policy")).toContain("sandbox");
+
+    const disposition = downloadRes.headers.get("Content-Disposition") as string;
+    expect(disposition).not.toMatch(/[\r\n]/);
+    // Nom UTF-8 percent-encodé : les accents survivent au transport.
+    expect(disposition).toContain("filename*=UTF-8''");
+    expect(disposition).toContain(encodeURIComponent("reçu"));
+  });
 });

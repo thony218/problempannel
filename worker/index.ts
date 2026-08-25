@@ -8,6 +8,8 @@ import { commentRoutes } from "./routes/comments";
 import { attachmentRoutes } from "./routes/attachments";
 import { correctiveActionRoutes } from "./routes/corrective-actions";
 import { historyRoutes } from "./routes/history";
+import { linkRoutes } from "./routes/links";
+import { analyticsRoutes } from "./routes/analytics";
 
 export const app = new Hono<AppEnv>();
 
@@ -33,5 +35,7 @@ app.route("/api", commentRoutes);
 app.route("/api", attachmentRoutes);
 app.route("/api", correctiveActionRoutes);
 app.route("/api", historyRoutes);
+app.route("/api", linkRoutes);
+app.route("/api", analyticsRoutes);
 
 export default app;

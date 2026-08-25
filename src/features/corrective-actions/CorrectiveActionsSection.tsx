@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../auth/AuthContext";
 import type { components } from "../../shared/api-types.generated";
+import { apiFetch } from "../../shared/apiClient";
 
 export type ApiCorrectiveAction = components["schemas"]["CorrectiveAction"];
 export type CorrectiveActionStatus = components["schemas"]["CorrectiveActionStatus"];
@@ -42,7 +43,7 @@ export function CorrectiveActionsSection({ publicId }: CorrectiveActionsSectionP
 
   const fetchActions = useCallback(async () => {
     try {
-      const res = await fetch(`/api/issues/${publicId}/corrective-actions`, {
+      const res = await apiFetch(`/api/issues/${publicId}/corrective-actions`, {
         headers: { Accept: "application/json" },
       });
       if (!res.ok) {
@@ -71,7 +72,7 @@ export function CorrectiveActionsSection({ publicId }: CorrectiveActionsSectionP
     setCreateError(null);
 
     try {
-      const res = await fetch(`/api/issues/${publicId}/corrective-actions`, {
+      const res = await apiFetch(`/api/issues/${publicId}/corrective-actions`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify({
@@ -139,7 +140,7 @@ export function CorrectiveActionsSection({ publicId }: CorrectiveActionsSectionP
     }
 
     try {
-      const res = await fetch(`/api/corrective-actions/${editAction.id}`, {
+      const res = await apiFetch(`/api/corrective-actions/${editAction.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Accept: "application/json" },
         body: JSON.stringify(payload),

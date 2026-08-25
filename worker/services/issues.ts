@@ -34,6 +34,7 @@ import {
   type ApiEffectivenessStatus,
 } from "../domain/resolution";
 import type { CreateIssueInput, ListIssuesQuery, UpdateIssueInput } from "../validation/issues";
+import { businessToday, type AppConfig } from "../domain/config";
 
 
 
@@ -163,7 +164,8 @@ export interface ListIssuesResponseData {
  */
 export async function listIssues(
   db: D1Database,
-  query: ListIssuesQuery
+  query: ListIssuesQuery,
+  config: Pick<AppConfig, "businessTimeZone">
 ): Promise<ListIssuesResponseData> {
   let cursorId: number | null = null;
   if (query.cursor) {
@@ -189,6 +191,7 @@ export async function listIssues(
     from: query.from,
     to: query.to,
     overdue: query.overdue,
+    businessToday: businessToday(config.businessTimeZone),
     effectivenessStatus: query.effectivenessStatus,
     effectivenessReviewDueBefore: query.effectivenessReviewDueBefore,
   });
@@ -231,18 +234,25 @@ export async function getIssueDetail(db: D1Database, publicId: string): Promise<
 }
 
 /**
- * PATCH /issues/{publicId} — mécanique de concurrence optimiste (FLOW-01).
+ * PATCH /issues/{publicId}.
  *
- * Portée volontairement limitée : applique les champs fournis et garde la
- * ligne cohérente avec les CHECK D1 (subcategory requise hors 'new',
- * waitingOn cohérent avec 'waiting', resolvedAt/By reflète le statut). Ne
- * met en œuvre ni la matrice de transitions (`FLOW-02`,
- * `01_produit/03_MATRICE_TRANSITIONS.md`), ni les préconditions de
- * résolution (`FLOW-03`), ni la règle de réouverture (`FLOW-04`), ni la
- * permission par champ (`01_produit/04_MATRICE_PERMISSIONS.md`, couverte
- * par `QA-01`) — tout statut est acceptable pour l'instant tant qu'il
- * respecte les contraintes structurelles de la table, et `requireUser`
- * (n'importe quel utilisateur actif) est la seule porte d'entrée.
+ * Ordre d'application des règles, du plus général au plus spécifique :
+ *  1. concurrence optimiste `If-Match` (`FLOW-01`);
+ *  2. permission par champ selon le rôle (`QA-01`,
+ *     `01_produit/04_MATRICE_PERMISSIONS.md`) — refusée avant toute lecture
+ *     de référentiel, pour ne rien divulguer à un acteur non autorisé;
+ *  3. existence/activité des références citées, cohérence catégorie ↔
+ *     sous-catégorie;
+ *  4. matrice de transitions de statut (`FLOW-02`,
+ *     `01_produit/03_MATRICE_TRANSITIONS.md`);
+ *  5. préconditions de résolution (`FLOW-03`) et réouverture (`FLOW-04`);
+ *  6. cohérence structurelle avec les CHECK D1 (sous-catégorie requise hors
+ *     'new', `waitingOn` cohérent avec 'waiting', `resolvedAt/By` aligné sur
+ *     le statut).
+ *
+ * Les erreurs de validation (3, 5, 6) sont accumulées pour renvoyer un seul
+ * 422 listant tous les champs en cause; les refus de permission (2, 4) sont
+ * immédiats (403 / 422 `INVALID_STATUS_TRANSITION`).
  *
  * `null` = publicId invalide ou dossier introuvable (404 côté route,
  * même contrat que getIssueDetail/findIssueByPublicId, cf. V4-ID-01).
@@ -250,6 +260,10 @@ export async function getIssueDetail(db: D1Database, publicId: string): Promise<
  * l'ETag courant, ou si une écriture concurrente a fait avancer
  * `row_version` entre cette lecture et l'UPDATE (revérifié au niveau SQL
  * via `WHERE row_version = ?`, cf. `updateIssueRow`).
+ *
+ * Dette connue : l'UPDATE et le lot de suivi (impacts + événement
+ * d'historique) sont deux écritures distinctes. Une panne D1 entre les deux
+ * laisserait un dossier modifié sans trace d'historique (cf. `G-007`).
  */
 export async function updateIssue(
   db: D1Database,
@@ -257,7 +271,8 @@ export async function updateIssue(
   ifMatch: string,
   actorUserId: number,
   actorRole: Role,
-  input: UpdateIssueInput
+  input: UpdateIssueInput,
+  config: Pick<AppConfig, "businessTimeZone">
 ): Promise<IssueDetail | null> {
   const id = parsePublicId(publicId);
   if (id === null) {
@@ -426,7 +441,7 @@ export async function updateIssue(
           ? input.effectivenessReviewDate
           : current.effectiveness_review_date;
       if (!reviewDate) {
-        columns.effectiveness_review_date = computeDefaultReviewDate();
+        columns.effectiveness_review_date = computeDefaultReviewDate(config.businessTimeZone);
       }
     }
   }

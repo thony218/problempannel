@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import type { components } from "../../shared/api-types.generated";
+import { apiFetch } from "../../shared/apiClient";
 
 export type CurrentUser = components["schemas"]["User"];
 export type MetaData = components["schemas"]["MetaResponse"]["data"];
@@ -31,10 +32,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const [meRes, metaRes] = await Promise.all([
-        fetch("/api/me", { headers: { Accept: "application/json" } }),
-        fetch("/api/meta", { headers: { Accept: "application/json" } }),
-      ]);
+      const [meRes, metaRes] = await Promise.all([apiFetch("/api/me"), apiFetch("/api/meta")]);
 
       if (meRes.status === 401) {
         setError({

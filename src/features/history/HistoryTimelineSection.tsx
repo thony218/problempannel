@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import type { components } from "../../shared/api-types.generated";
+import { apiFetch } from "../../shared/apiClient";
 
 export type ApiHistoryEvent = components["schemas"]["HistoryEvent"];
 
@@ -30,7 +31,7 @@ export function HistoryTimelineSection({ publicId }: HistoryTimelineSectionProps
 
   const fetchHistory = useCallback(async () => {
     try {
-      const res = await fetch(`/api/issues/${publicId}/history?limit=50`, {
+      const res = await apiFetch(`/api/issues/${publicId}/history?limit=50`, {
         headers: { Accept: "application/json" },
       });
       if (!res.ok) {
@@ -58,7 +59,7 @@ export function HistoryTimelineSection({ publicId }: HistoryTimelineSectionProps
     setLoadingMore(true);
 
     try {
-      const res = await fetch(`/api/issues/${publicId}/history?limit=50&cursor=${encodeURIComponent(nextCursor)}`, {
+      const res = await apiFetch(`/api/issues/${publicId}/history?limit=50&cursor=${encodeURIComponent(nextCursor)}`, {
         headers: { Accept: "application/json" },
       });
       if (res.ok) {

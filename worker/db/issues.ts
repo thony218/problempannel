@@ -362,6 +362,8 @@ export interface ListIssuesDbParams {
   from?: string;
   to?: string;
   overdue?: boolean;
+  /** Date métier courante (AAAA-MM-JJ), requise dès que `overdue` est actif. */
+  businessToday: string;
   effectivenessStatus?: string;
   effectivenessReviewDueBefore?: string;
 }
@@ -433,7 +435,10 @@ export async function queryIssuesList(
   }
 
   if (params.overdue) {
-    whereClauses.push("due_date IS NOT NULL AND date(due_date) < date('now') AND status != 'resolved'");
+    // `date('now')` serait la date UTC ; 08_DEFINITIONS_ANALYTIQUES.md impose
+    // la « date métier courante », fournie par l'appelant.
+    whereClauses.push("due_date IS NOT NULL AND date(due_date) < date(?) AND status != 'resolved'");
+    bindings.push(params.businessToday);
   }
 
   if (params.effectivenessStatus) {

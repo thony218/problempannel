@@ -7,12 +7,13 @@ import { requireUser } from "../auth/middleware";
 import { parseJsonBody, parseQueryParams } from "../validation/request";
 import { createIssueRequestSchema, listIssuesQuerySchema, updateIssueRequestSchema } from "../validation/issues";
 import { createIssue, getIssueDetail, listIssues, updateIssue } from "../services/issues";
+import { appConfigFromEnv } from "../domain/config";
 
 export const issueRoutes = new Hono<AppEnv>();
 
 issueRoutes.get("/issues", requireUser, async (c) => {
   const query = parseQueryParams(c, listIssuesQuerySchema);
-  const result = await listIssues(c.env.DB, query);
+  const result = await listIssues(c.env.DB, query, appConfigFromEnv(c.env));
   return c.json(okBody(result), 200);
 });
 
@@ -32,7 +33,15 @@ issueRoutes.patch("/issues/:publicId", requireUser, async (c) => {
   }
   const user = c.get("user");
   const input = await parseJsonBody(c, updateIssueRequestSchema);
-  const detail = await updateIssue(c.env.DB, c.req.param("publicId"), ifMatch, user.id, user.role, input);
+  const detail = await updateIssue(
+    c.env.DB,
+    c.req.param("publicId"),
+    ifMatch,
+    user.id,
+    user.role,
+    input,
+    appConfigFromEnv(c.env)
+  );
   if (!detail) {
     throw new AppError("NOT_FOUND", "Dossier introuvable.");
   }

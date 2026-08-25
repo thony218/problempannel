@@ -92,7 +92,11 @@ export async function deleteComment(
   actorRole: Role
 ): Promise<boolean | null> {
   const comment = await findCommentById(db, commentId);
-  if (!comment) return null;
+  // Un commentaire déjà supprimé est traité comme introuvable (404) : le
+  // re-supprimer écraserait l'auteur/le motif d'origine et empilerait un
+  // second événement `comment_deleted` (G-007, historique append-only).
+  // Même contrat que `deleteAttachment`.
+  if (!comment || comment.deleted_at !== null) return null;
 
   // 01_produit/04_MATRICE_PERMISSIONS.md : Soft-delete commentaire réservé aux manager et admin
   if (actorRole !== "manager" && actorRole !== "admin") {

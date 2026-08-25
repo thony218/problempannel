@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import type { components } from "../../shared/api-types.generated";
+import { apiFetch } from "../../shared/apiClient";
 
 export type Issue = components["schemas"]["Issue"];
 export type IssueStatus = components["schemas"]["IssueStatus"];
@@ -140,7 +141,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
         headers["If-Match"] = etag;
       }
 
-      const res = await fetch(`/api/issues/${issue.publicId}`, {
+      const res = await apiFetch(`/api/issues/${issue.publicId}`, {
         method: "PATCH",
         headers,
         body: JSON.stringify(payload),

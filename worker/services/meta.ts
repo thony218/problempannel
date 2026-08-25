@@ -1,12 +1,8 @@
 import { listActiveReferences } from "../db/reference";
+import type { AppConfig } from "../domain/config";
 
-export interface MetaConfig {
-  businessTimeZone: string;
-  maxAttachmentBytes: number;
-  maxAttachmentsPerIssue: number;
-  recurringWindowDays: number;
-  recurringMinCount: number;
-}
+/** Le bloc `config` de /api/meta est exactement la configuration d'exécution. */
+export type MetaConfig = AppConfig;
 
 export interface Meta {
   locations: Awaited<ReturnType<typeof listActiveReferences>>;

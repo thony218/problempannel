@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { useAuth } from "../auth/AuthContext";
 import type { components } from "../../shared/api-types.generated";
+import { apiFetch } from "../../shared/apiClient";
 
 export type ApiAttachment = components["schemas"]["Attachment"];
 
@@ -33,7 +34,7 @@ export function AttachmentsSection({ publicId }: AttachmentsSectionProps) {
 
   const fetchAttachments = useCallback(async () => {
     try {
-      const res = await fetch(`/api/issues/${publicId}/attachments`, {
+      const res = await apiFetch(`/api/issues/${publicId}/attachments`, {
         headers: { Accept: "application/json" },
       });
       if (!res.ok) {
@@ -89,7 +90,7 @@ export function AttachmentsSection({ publicId }: AttachmentsSectionProps) {
       const formData = new FormData();
       formData.append("file", selectedFile);
 
-      const res = await fetch(`/api/issues/${publicId}/attachments`, {
+      const res = await apiFetch(`/api/issues/${publicId}/attachments`, {
         method: "POST",
         body: formData,
       });
@@ -116,7 +117,7 @@ export function AttachmentsSection({ publicId }: AttachmentsSectionProps) {
 
     setDeletingId(attachmentId);
     try {
-      const res = await fetch(`/api/attachments/${attachmentId}`, {
+      const res = await apiFetch(`/api/attachments/${attachmentId}`, {
         method: "DELETE",
         headers: { Accept: "application/json" },
       });

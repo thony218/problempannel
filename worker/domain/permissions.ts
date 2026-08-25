@@ -80,9 +80,13 @@ export function validateIssueUpdatePermissions(params: ValidateIssueUpdatePermis
     }
   }
 
-  // 3. Waiting / Status permissions :
-  // Si l'employé touche à waitingOn sans changer de statut :
-  if ("waitingOn" in input && input.waitingOn !== undefined && !("status" in input)) {
+  // 3. Attente (waitingOn) : réservée au responsable désigné.
+  // La vérification ne doit pas dépendre de la présence de `status` dans la
+  // requête — sinon un employé non-responsable rejoue le statut courant
+  // (transition no-op, donc validateStatusTransition sort immédiatement) et
+  // détourne l'attente. Cf. 01_produit/03_MATRICE_TRANSITIONS.md
+  // §Préconditions → waiting : « si acteur employee : il doit être owner ».
+  if ("waitingOn" in input && input.waitingOn !== undefined) {
     if (current.owner_user_id !== actorUserId) {
       throw new AppError(
         "FORBIDDEN",

@@ -54,17 +54,36 @@ describe("worker/domain/resolution", () => {
     expect(errors.status).toContain("2 action(s) corrective(s) bloquante(s)");
   });
 
-  describe("computeDefaultReviewDate (+30 days)", () => {
+  describe("computeDefaultReviewDate (+30 jours après la date métier)", () => {
+    const TZ = "America/Toronto";
+
     it("computes exactly 30 days ahead from a reference date", () => {
       const ref = new Date("2026-08-01T12:00:00Z");
-      const computed = computeDefaultReviewDate(ref);
-      expect(computed).toBe("2026-08-31");
+      expect(computeDefaultReviewDate(TZ, ref)).toBe("2026-08-31");
     });
 
     it("handles month rollover properly", () => {
-      const ref = new Date("2026-01-15T00:00:00Z");
-      const computed = computeDefaultReviewDate(ref);
-      expect(computed).toBe("2026-02-14");
+      const ref = new Date("2026-01-15T05:00:00Z");
+      expect(computeDefaultReviewDate(TZ, ref)).toBe("2026-02-14");
+    });
+
+    /**
+     * Régression : 21 h à Montréal = 01 h UTC le lendemain. Partir de l'UTC
+     * daterait la révision d'un jour de trop (08_DEFINITIONS_ANALYTIQUES.md
+     * — « date métier courante »).
+     */
+    it("uses the business day, not the UTC day, late in the evening", () => {
+      const lateEveningInToronto = new Date("2026-08-25T01:30:00Z"); // 24 août 21 h 30 à Montréal
+      expect(computeDefaultReviewDate(TZ, lateEveningInToronto)).toBe("2026-09-23");
+    });
+
+    /**
+     * Régression : le 8 mars 2026 le Québec passe à l'heure avancée. Une
+     * addition en millisecondes (+30 × 86 400 000) reculerait d'un jour.
+     */
+    it("stays on calendar days across a daylight saving transition", () => {
+      const beforeDstChange = new Date("2026-03-01T17:00:00Z"); // 1er mars, midi à Montréal
+      expect(computeDefaultReviewDate(TZ, beforeDstChange)).toBe("2026-03-31");
     });
   });
 });

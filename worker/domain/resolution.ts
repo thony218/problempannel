@@ -1,4 +1,5 @@
 import type { components } from "../../src/shared/api-types.generated";
+import { addCalendarDays, businessToday } from "./config";
 
 export type ApiCauseStatus = components["schemas"]["CauseStatus"];
 export type ApiPermanentCorrectionType = components["schemas"]["PermanentCorrectionType"];
@@ -53,11 +54,17 @@ export function validateResolutionPreconditions(
   return fields;
 }
 
+export const DEFAULT_REVIEW_DELAY_DAYS = 30;
+
 /**
- * Calcule la date de révision d'efficacité par défaut à +30 jours (D-29 / S12).
- * Format ISO AAAA-MM-JJ (YYYY-MM-DD).
+ * Date de révision d'efficacité par défaut : +30 jours après la date **métier**
+ * courante (D-29 / S12). Format AAAA-MM-JJ.
+ *
+ * Le calcul part de la date métier (et non de `Date.now()` en UTC) puis ajoute
+ * des jours calendaires : une résolution saisie à 21 h à Montréal ne doit pas
+ * produire une échéance datée du lendemain, et un passage à l'heure avancée
+ * dans l'intervalle ne doit pas décaler le résultat.
  */
-export function computeDefaultReviewDate(baseDate: Date = new Date()): string {
-  const target = new Date(baseDate.getTime() + 30 * 24 * 60 * 60 * 1000);
-  return target.toISOString().slice(0, 10);
+export function computeDefaultReviewDate(timeZone: string, now: Date = new Date()): string {
+  return addCalendarDays(businessToday(timeZone, now), DEFAULT_REVIEW_DELAY_DAYS);
 }

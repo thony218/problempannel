@@ -1,9 +1,11 @@
 import React from "react";
 import { useAuth } from "../features/auth/AuthContext";
 
+export type NavTab = "new" | "list" | "analytics";
+
 export interface AppShellProps {
-  currentTab: "new" | "list";
-  onTabChange: (tab: "new" | "list") => void;
+  currentTab: NavTab;
+  onTabChange: (tab: NavTab) => void;
   children: React.ReactNode;
 }
 
@@ -99,6 +101,14 @@ export function AppShell({ currentTab, onTabChange, children }: AppShellProps) {
             data-testid="tab-list"
           >
             📑 Registre
+          </button>
+          <button
+            type="button"
+            className={`nav-btn ${currentTab === "analytics" ? "active" : ""}`}
+            onClick={() => onTabChange("analytics")}
+            data-testid="tab-analytics"
+          >
+            📊 Analyse
           </button>
         </div>
       </nav>

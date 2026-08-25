@@ -91,13 +91,14 @@ export type ListIssuesQuery = z.infer<typeof listIssuesQuerySchema>;
 
 /**
  * Miroir de UpdateIssueRequest dans contracts/openapi.yaml (minProperties:1,
- * additionalProperties:false). Accepte `status`/`waitingOn`/`reopenReason` tel
- * que défini au contrat ; aucune règle de transition (FLOW-02), de
- * précondition de résolution (FLOW-03) ni de permission par champ (FLOW-02
- * à 04 + QA-01) n'est appliquée ici — seule la cohérence structurelle déjà
- * imposée par les CHECK D1 (subcategory requise hors 'new', waitingOn
- * cohérent avec 'waiting') est validée en amont côté service pour éviter
- * un crash SQLITE_CONSTRAINT sur une requête par ailleurs bien formée.
+ * additionalProperties:false).
+ *
+ * Ce schéma ne valide que la **forme** : présence, type, bornes et format des
+ * champs. Les règles métier — transitions (FLOW-02), préconditions de
+ * résolution (FLOW-03), réouverture (FLOW-04), permission par champ (QA-01)
+ * et cohérence avec les CHECK D1 — sont appliquées par
+ * `worker/services/issues.ts#updateIssue`, qui seul dispose de l'état courant
+ * du dossier et du rôle de l'acteur.
  */
 export const updateIssueRequestSchema = z
   .strictObject({

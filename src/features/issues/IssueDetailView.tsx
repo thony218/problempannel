@@ -5,6 +5,7 @@ import { CommentsSection } from "../comments/CommentsSection";
 import { AttachmentsSection } from "../attachments/AttachmentsSection";
 import { CorrectiveActionsSection } from "../corrective-actions/CorrectiveActionsSection";
 import { HistoryTimelineSection } from "../history/HistoryTimelineSection";
+import { LinksSection } from "../links/LinksSection";
 import { EditIssueModal } from "./EditIssueModal";
 
 export type IssueDetail = components["schemas"]["IssueDetail"];
@@ -14,11 +15,12 @@ export type Priority = components["schemas"]["Priority"];
 export interface IssueDetailViewProps {
   publicId: string;
   onBack: () => void;
+  onSelectIssue?: (publicId: string) => void;
 }
 
-type DetailTab = "details" | "comments" | "attachments" | "actions" | "history";
+type DetailTab = "details" | "comments" | "attachments" | "actions" | "links" | "history";
 
-export function IssueDetailView({ publicId, onBack }: IssueDetailViewProps) {
+export function IssueDetailView({ publicId, onBack, onSelectIssue }: IssueDetailViewProps) {
   const { user, meta } = useAuth();
 
   const [detail, setDetail] = useState<IssueDetail | null>(null);
@@ -223,6 +225,14 @@ export function IssueDetailView({ publicId, onBack }: IssueDetailViewProps) {
         </button>
         <button
           type="button"
+          className={`tab-btn ${activeTab === "links" ? "active" : ""}`}
+          onClick={() => setActiveTab("links")}
+          data-testid="tab-links"
+        >
+          🔗 Liens & Récurrences
+        </button>
+        <button
+          type="button"
           className={`tab-btn ${activeTab === "history" ? "active" : ""}`}
           onClick={() => setActiveTab("history")}
           data-testid="tab-history"
@@ -411,6 +421,15 @@ export function IssueDetailView({ publicId, onBack }: IssueDetailViewProps) {
       {activeTab === "attachments" && <AttachmentsSection publicId={publicId} />}
 
       {activeTab === "actions" && <CorrectiveActionsSection publicId={publicId} />}
+
+      {activeTab === "links" && (
+        <LinksSection
+          publicId={publicId}
+          subcategoryId={issue.subcategoryId}
+          locationId={issue.locationId}
+          onSelectIssue={onSelectIssue}
+        />
+      )}
 
       {activeTab === "history" && <HistoryTimelineSection publicId={publicId} />}
 
