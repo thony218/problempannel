@@ -22,6 +22,24 @@ describe("worker/domain/cursor", () => {
     }
   });
 
+  it("round-trips composite sort cursors", () => {
+    expect(decodeCursor(encodeCursor({ id: 8, sort: "priority", sortKey: 3 }))).toEqual({
+      id: 8,
+      sort: "priority",
+      sortKey: 3,
+    });
+    expect(decodeCursor(encodeCursor({ id: 9, sort: "dueDate", sortKey: "2026-09-01" }))).toEqual({
+      id: 9,
+      sort: "dueDate",
+      sortKey: "2026-09-01",
+    });
+    expect(decodeCursor(encodeCursor({ id: 10, sort: "dueDate", sortKey: null }))).toEqual({
+      id: 10,
+      sort: "dueDate",
+      sortKey: null,
+    });
+  });
+
   it("returns null for invalid or corrupted cursors", () => {
     expect(decodeCursor("")).toBeNull();
     expect(decodeCursor("   ")).toBeNull();

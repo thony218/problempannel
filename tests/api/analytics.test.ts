@@ -3,8 +3,10 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { app } from "../../worker/index";
 
 const EMPLOYEE_HEADER = { "X-Dev-User-Email": "emp@example.test", "Content-Type": "application/json" };
+const MANAGER_HEADER = { "X-Dev-User-Email": "manager@example.test", "Content-Type": "application/json" };
 
 let employeeId: number;
+let managerId: number;
 let locationMtlId: number;
 let locationQcId: number;
 let categoryId: number;
@@ -28,6 +30,12 @@ beforeEach(async () => {
   employeeId = (
     await env.DB.prepare(
       "INSERT INTO users (email, display_name, role, active) VALUES ('emp@example.test', 'Employé', 'employee', 1) RETURNING id"
+    ).first<{ id: number }>()
+  )!.id;
+
+  managerId = (
+    await env.DB.prepare(
+      "INSERT INTO users (email, display_name, role, active) VALUES ('manager@example.test', 'Gestionnaire', 'manager', 1) RETURNING id"
     ).first<{ id: number }>()
   )!.id;
 
@@ -213,5 +221,70 @@ describe("ANA-01..04: Endpoints Analytique et Récurrence", () => {
     expect(body.data.pending).toBe(3);
     // 2 / (2 + 1) = 0.67
     expect(body.data.effectivenessRate).toBe(0.67);
+  });
+
+  it("S56: groups errors by employee and type for management without exposing email", async () => {
+    for (let i = 0; i < 2; i++) {
+      await env.DB.prepare(
+        `INSERT INTO issues (
+          occurred_on, location_id, category_id, subcategory_id, description,
+          priority, status, error_actor_user_id, created_by_user_id
+        ) VALUES ('2026-08-20', ?, ?, ?, ?, 'normal', 'new', ?, ?)`
+      )
+        .bind(
+          locationMtlId,
+          categoryId,
+          subcategory1Id,
+          `Erreur de prix ${i + 1}`,
+          employeeId,
+          managerId
+        )
+        .run();
+    }
+
+    await env.DB.prepare(
+      `INSERT INTO issues (
+        occurred_on, location_id, category_id, subcategory_id, description,
+        priority, status, error_actor_user_id, created_by_user_id
+      ) VALUES ('2026-08-21', ?, ?, ?, 'Erreur de stock', 'normal', 'new', ?, ?)`
+    )
+      .bind(locationMtlId, categoryId, subcategory2Id, employeeId, managerId)
+      .run();
+
+    const forbidden = await app.request(
+      "http://local/api/analytics/errors-by-employee",
+      { headers: EMPLOYEE_HEADER },
+      env
+    );
+    expect(forbidden.status).toBe(403);
+
+    const res = await app.request(
+      "http://local/api/analytics/errors-by-employee?from=2026-08-20&to=2026-08-21",
+      { headers: MANAGER_HEADER },
+      env
+    );
+    expect(res.status).toBe(200);
+
+    const body = (await res.json()) as any;
+    expect(body.data).toHaveLength(2);
+    expect(body.data).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          userId: employeeId,
+          displayName: "Employé",
+          active: true,
+          subcategoryId: subcategory1Id,
+          count: 2,
+        }),
+        expect.objectContaining({
+          userId: employeeId,
+          displayName: "Employé",
+          active: true,
+          subcategoryId: subcategory2Id,
+          count: 1,
+        }),
+      ])
+    );
+    for (const row of body.data) expect(row).not.toHaveProperty("email");
   });
 });

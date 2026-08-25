@@ -10,6 +10,13 @@ export interface AppUser {
   active: boolean;
 }
 
+export interface DirectoryUser {
+  id: number;
+  displayName: string;
+  role: UserRole;
+  active: boolean;
+}
+
 interface UserRow {
   id: number;
   email: string;
@@ -54,4 +61,26 @@ export async function findActiveUserById(db: D1Database, id: number): Promise<Ap
     .bind(id)
     .first<UserRow>();
   return row ? mapUserRow(row) : null;
+}
+
+/**
+ * Annuaire interne sûr pour les sélecteurs et les libellés historiques.
+ * Inclut les comptes inactifs afin qu'une ancienne attribution garde un nom,
+ * mais n'expose jamais le courriel ni les localisations par défaut.
+ */
+export async function listUserDirectory(db: D1Database): Promise<DirectoryUser[]> {
+  const result = await db
+    .prepare(
+      `SELECT id, display_name, role, active
+       FROM users
+       ORDER BY active DESC, display_name COLLATE NOCASE ASC, id ASC`
+    )
+    .all<{ id: number; display_name: string; role: UserRole; active: number }>();
+
+  return (result.results || []).map((row) => ({
+    id: row.id,
+    displayName: row.display_name,
+    role: row.role,
+    active: row.active === 1,
+  }));
 }

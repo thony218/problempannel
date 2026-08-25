@@ -1,7 +1,7 @@
 # Écran Analyse — spécification complète
 
-> Version : **4.0.0**  
-> Dernière mise à jour : **2026-08-24**  
+> Version : **5.0.0**
+> Dernière mise à jour : **2026-08-25**
 > Propriétaire : **Responsable UX**  
 > Statut : **FROZEN**
 
@@ -9,8 +9,9 @@
 
 1. Synthèse
 2. Récurrences
-3. Efficacité
-4. Révisions dues
+3. Erreurs par employé — gestionnaire/admin seulement
+4. Efficacité
+5. Révisions dues
 
 ## Synthèse
 
@@ -33,6 +34,18 @@ Groupes scope=location.
 Groupes scope=organization.
 
 Ne jamais mélanger les deux dans un seul compteur sans libellé.
+
+## Erreurs par employé
+
+Tableau groupé par employé concerné et sous-catégorie :
+- nom affiché de l'employé;
+- statut actif/inactif;
+- type précis d'erreur;
+- nombre de dossiers;
+- lien vers le dossier le plus récent.
+
+Cette sous-vue et son endpoint sont réservés aux gestionnaires et
+administrateurs. Aucun courriel n'est exposé.
 
 ## Révisions dues
 

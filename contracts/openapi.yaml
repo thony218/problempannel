@@ -118,6 +118,22 @@ paths:
         schema:
           type: integer
           minimum: 1
+      - name: errorActorUserId
+        in: query
+        description: Employé concerné par l'erreur.
+        schema:
+          type: integer
+          minimum: 1
+      - name: sort
+        in: query
+        schema:
+          type: string
+          enum:
+          - newest
+          - oldest
+          - priority
+          - dueDate
+          default: newest
       - name: from
         in: query
         schema:
@@ -632,6 +648,30 @@ paths:
         '401':
           $ref: '#/components/responses/Unauthorized'
       description: Agrège uniquement issues.effectiveness_status; les actions correctives sont exclues du KPI principal.
+  /analytics/errors-by-employee:
+    get:
+      tags:
+      - Analytics
+      operationId: getErrorsByEmployee
+      summary: Agréger les erreurs par employé et sous-catégorie.
+      parameters:
+      - $ref: '#/components/parameters/DateFrom'
+      - $ref: '#/components/parameters/DateTo'
+      - $ref: '#/components/parameters/LocationIdQuery'
+      - $ref: '#/components/parameters/DepartmentIdQuery'
+      - $ref: '#/components/parameters/CategoryIdQuery'
+      responses:
+        '200':
+          description: Agrégations par employé concerné et sous-catégorie.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EmployeeErrorStatsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+      description: Réservé aux gestionnaires et administrateurs. Aucun courriel ni texte libre n'est retourné.
   /admin/users:
     get:
       tags:
@@ -1305,6 +1345,25 @@ components:
           - 'null'
         active:
           type: boolean
+    DirectoryUser:
+      type: object
+      additionalProperties: false
+      required:
+      - id
+      - displayName
+      - role
+      - active
+      properties:
+        id:
+          type: integer
+          minimum: 1
+        displayName:
+          type: string
+        role:
+          $ref: '#/components/schemas/Role'
+        active:
+          type: boolean
+      description: Annuaire interne minimal; ne contient jamais le courriel.
     ReferenceItem:
       type: object
       required:
@@ -1431,6 +1490,11 @@ components:
           - integer
           - 'null'
           minimum: 1
+        errorActorUserId:
+          type:
+          - integer
+          - 'null'
+          minimum: 1
         dueDate:
           type:
           - string
@@ -1507,6 +1571,7 @@ components:
       - createdByUserId
       - createdAt
       - updatedAt
+      - errorActorUserId
       properties:
         publicId:
           $ref: '#/components/schemas/PublicId'
@@ -1533,6 +1598,10 @@ components:
         status:
           $ref: '#/components/schemas/IssueStatus'
         ownerUserId:
+          type:
+          - integer
+          - 'null'
+        errorActorUserId:
           type:
           - integer
           - 'null'
@@ -1885,6 +1954,7 @@ components:
       - categories
       - subcategories
       - impactTypes
+      - users
       - config
       properties:
         locations:
@@ -1907,6 +1977,10 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/ReferenceItem'
+        users:
+          type: array
+          items:
+            $ref: '#/components/schemas/DirectoryUser'
         config:
           type: object
           required:
@@ -2000,6 +2074,32 @@ components:
           description: effective / (effective + ineffective)
       description: Agrégation basée uniquement sur issues.effectiveness_status. corrective_actions.effectiveness_status
         n'alimente pas ce KPI V1.
+    EmployeeErrorStat:
+      type: object
+      additionalProperties: false
+      required:
+      - userId
+      - displayName
+      - active
+      - subcategoryId
+      - count
+      - latestIssuePublicId
+      properties:
+        userId:
+          type: integer
+          minimum: 1
+        displayName:
+          type: string
+        active:
+          type: boolean
+        subcategoryId:
+          type: integer
+          minimum: 1
+        count:
+          type: integer
+          minimum: 1
+        latestIssuePublicId:
+          $ref: '#/components/schemas/PublicId'
     ErrorBody:
       type: object
       required:
@@ -2313,6 +2413,19 @@ components:
           const: true
         data:
           $ref: '#/components/schemas/Effectiveness'
+    EmployeeErrorStatsResponse:
+      type: object
+      required:
+      - ok
+      - data
+      properties:
+        ok:
+          type: boolean
+          const: true
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/EmployeeErrorStat'
     ReferenceResponse:
       type: object
       required:

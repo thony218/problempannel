@@ -213,10 +213,10 @@ describe("GET /api/issues", () => {
 
   it("filters by locationId, departmentId, categoryId and ownerUserId", async () => {
     await env.DB.prepare(
-      `INSERT INTO issues (occurred_on, created_by_user_id, location_id, department_id, category_id, subcategory_id, owner_user_id, description, priority, status)
-       VALUES ('2026-08-20', ?, ?, ?, ?, ?, ?, 'Cible exacte', 'normal', 'new')`
+      `INSERT INTO issues (occurred_on, created_by_user_id, location_id, department_id, category_id, subcategory_id, owner_user_id, error_actor_user_id, description, priority, status)
+       VALUES ('2026-08-20', ?, ?, ?, ?, ?, ?, ?, 'Cible exacte', 'normal', 'new')`
     )
-      .bind(userId1, locationId1, deptId1, catId1, subcatId1, userId2)
+      .bind(userId1, locationId1, deptId1, catId1, subcatId1, userId2, userId2)
       .run();
 
     await env.DB.prepare(
@@ -238,8 +238,53 @@ describe("GET /api/issues", () => {
     const resOwner = await get(`/issues?ownerUserId=${userId2}`);
     expect(((await resOwner.json()) as any).data.items).toHaveLength(1);
 
+    const resErrorActor = await get(`/issues?errorActorUserId=${userId2}`);
+    const errorActorBody = (await resErrorActor.json()) as any;
+    expect(errorActorBody.data.items).toHaveLength(1);
+    expect(errorActorBody.data.items[0].errorActorUserId).toBe(userId2);
+
     const resDiff = await get(`/issues?locationId=${locationId2}&categoryId=${catId1}`);
     expect(((await resDiff.json()) as any).data.items).toHaveLength(0);
+  });
+
+  it("sorts oldest, priority and due date with stable cursor pagination", async () => {
+    const inserted: number[] = [];
+    for (const [priority, dueDate] of [
+      ["normal", "2026-09-10"],
+      ["urgent", null],
+      ["important", "2026-08-30"],
+      ["urgent", "2026-08-20"],
+    ] as const) {
+      const row = await env.DB.prepare(
+        `INSERT INTO issues (occurred_on, created_by_user_id, location_id, category_id, description, priority, status, due_date)
+         VALUES ('2026-08-20', ?, ?, ?, 'Tri stable', ?, 'new', ?) RETURNING id`
+      ).bind(userId1, locationId1, catId1, priority, dueDate).first<{ id: number }>();
+      inserted.push(row!.id);
+    }
+
+    const oldest = (await (await get("/issues?sort=oldest")).json()) as any;
+    expect(oldest.data.items.map((item: any) => item.publicId)).toEqual(inserted.map(toPublicId));
+
+    const priorityPage1 = (await (await get("/issues?sort=priority&limit=2")).json()) as any;
+    expect(priorityPage1.data.items.map((item: any) => item.publicId)).toEqual([
+      toPublicId(inserted[3]),
+      toPublicId(inserted[1]),
+    ]);
+    const priorityPage2 = (await (
+      await get(`/issues?sort=priority&limit=2&cursor=${encodeURIComponent(priorityPage1.data.nextCursor)}`)
+    ).json()) as any;
+    expect(priorityPage2.data.items.map((item: any) => item.publicId)).toEqual([
+      toPublicId(inserted[2]),
+      toPublicId(inserted[0]),
+    ]);
+
+    const due = (await (await get("/issues?sort=dueDate")).json()) as any;
+    expect(due.data.items.map((item: any) => item.publicId)).toEqual([
+      toPublicId(inserted[3]),
+      toPublicId(inserted[2]),
+      toPublicId(inserted[0]),
+      toPublicId(inserted[1]),
+    ]);
   });
 
   it("filters by date range (from / to)", async () => {

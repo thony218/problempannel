@@ -9,9 +9,10 @@ import { businessToday } from "../../shared/businessDate";
 export type ApiAnalyticsSummary = components["schemas"]["AnalyticsSummary"];
 export type ApiRecurringGroup = components["schemas"]["RecurringGroup"];
 export type ApiEffectiveness = components["schemas"]["Effectiveness"];
+export type ApiEmployeeErrorStat = components["schemas"]["EmployeeErrorStat"];
 export type ApiIssue = components["schemas"]["Issue"];
 
-type AnalyticsSubView = "summary" | "recurring" | "effectiveness" | "reviews";
+type AnalyticsSubView = "summary" | "recurring" | "employees" | "effectiveness" | "reviews";
 
 /**
  * Tableau de bord analytique.
@@ -22,7 +23,7 @@ type AnalyticsSubView = "summary" | "recurring" | "effectiveness" | "reviews";
  * verra en ouvrant le lien.
  */
 export function AnalyticsView() {
-  const { meta } = useAuth();
+  const { meta, user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -36,7 +37,13 @@ export function AnalyticsView() {
     setSearchParams(next, { replace: true });
   };
 
-  const activeSubView = param("vue", "summary") as AnalyticsSubView;
+  const requestedSubView = param("vue", "summary") as AnalyticsSubView;
+  const canViewEmployeeErrors = user?.role === "manager" || user?.role === "admin";
+  // Un lien partagé vers la vue protégée ne doit pas laisser un employé sur
+  // un tableau vide : l'API reste protégée et l'interface revient à Synthèse.
+  const activeSubView = requestedSubView === "employees" && !canViewEmployeeErrors
+    ? "summary"
+    : requestedSubView;
   const setActiveSubView = (value: AnalyticsSubView) => setParam("vue", value, "summary");
 
   // Filtres globaux
@@ -44,6 +51,10 @@ export function AnalyticsView() {
   const dateTo = param("dateTo");
   const locationId: number | "" = param("locationId") ? Number(param("locationId")) : "";
   const categoryId: number | "" = param("categoryId") ? Number(param("categoryId")) : "";
+  const reviewDueBefore = param(
+    "effectivenessReviewDueBefore",
+    businessToday(meta?.config.businessTimeZone ?? "America/Toronto")
+  );
 
   const setDateFrom = (value: string) => setParam("dateFrom", value);
   const setDateTo = (value: string) => setParam("dateTo", value);
@@ -54,6 +65,7 @@ export function AnalyticsView() {
   const [summary, setSummary] = useState<ApiAnalyticsSummary | null>(null);
   const [recurring, setRecurring] = useState<ApiRecurringGroup[]>([]);
   const [effectiveness, setEffectiveness] = useState<ApiEffectiveness | null>(null);
+  const [employeeErrors, setEmployeeErrors] = useState<ApiEmployeeErrorStat[]>([]);
   const [pendingReviewIssues, setPendingReviewIssues] = useState<ApiIssue[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -63,19 +75,22 @@ export function AnalyticsView() {
     setError(null);
 
     const query = new URLSearchParams();
-    if (dateFrom) query.set("dateFrom", dateFrom);
-    if (dateTo) query.set("dateTo", dateTo);
+    if (dateFrom) query.set("from", dateFrom);
+    if (dateTo) query.set("to", dateTo);
     if (locationId) query.set("locationId", String(locationId));
     if (categoryId) query.set("categoryId", String(categoryId));
 
     const qs = query.toString() ? `?${query.toString()}` : "";
 
     try {
-      const [sumRes, recRes, effRes, issuesRes] = await Promise.all([
+      const [sumRes, recRes, effRes, issuesRes, employeeRes] = await Promise.all([
         apiFetch(`/api/analytics/summary${qs}`, { headers: { Accept: "application/json" } }),
         apiFetch(`/api/analytics/recurring${qs}`, { headers: { Accept: "application/json" } }),
         apiFetch(`/api/analytics/effectiveness${qs}`, { headers: { Accept: "application/json" } }),
-        apiFetch(`/api/issues?status=resolved&limit=50`, { headers: { Accept: "application/json" } }),
+        apiFetch(`/api/issues?effectivenessReviewDueBefore=${encodeURIComponent(reviewDueBefore)}&limit=50`, { headers: { Accept: "application/json" } }),
+        canViewEmployeeErrors
+          ? apiFetch(`/api/analytics/errors-by-employee${qs}`, { headers: { Accept: "application/json" } })
+          : Promise.resolve(null),
       ]);
 
       if (sumRes.ok) {
@@ -100,12 +115,19 @@ export function AnalyticsView() {
           setPendingReviewIssues(pending);
         }
       }
+
+      if (employeeRes?.ok) {
+        const employeeData = (await employeeRes.json()) as components["schemas"]["EmployeeErrorStatsResponse"];
+        if (employeeData.ok) setEmployeeErrors(employeeData.data);
+      } else if (!canViewEmployeeErrors) {
+        setEmployeeErrors([]);
+      }
     } catch (err: any) {
       setError(err.message || "Erreur lors du chargement des données d'analyse.");
     } finally {
       setLoading(false);
     }
-  }, [dateFrom, dateTo, locationId, categoryId]);
+  }, [dateFrom, dateTo, locationId, categoryId, reviewDueBefore, canViewEmployeeErrors]);
 
   useEffect(() => {
     fetchAnalyticsData();
@@ -132,6 +154,14 @@ export function AnalyticsView() {
       ["Corrections effectives", effectiveness?.effective ?? 0],
       ["Corrections inefficaces", effectiveness?.ineffective ?? 0],
       ["Corrections en attente", effectiveness?.pending ?? 0],
+      [],
+      ["Erreurs attribuées par employé et type", employeeErrors.length],
+      ...employeeErrors.map((item) => [
+        item.displayName,
+        getSubcategoryLabel(item.subcategoryId),
+        item.count,
+        item.latestIssuePublicId,
+      ]),
     ];
 
     const csvContent = "\uFEFF" + rows.map((e) => e.join(";")).join("\n");
@@ -253,6 +283,16 @@ export function AnalyticsView() {
         >
           🔄 Récurrences ({recurring.length})
         </button>
+        {(user?.role === "manager" || user?.role === "admin") && (
+          <button
+            type="button"
+            className={`tab-btn ${activeSubView === "employees" ? "active" : ""}`}
+            onClick={() => setActiveSubView("employees")}
+            data-testid="subtab-employees"
+          >
+            👥 Erreurs par employé ({employeeErrors.length})
+          </button>
+        )}
         <button
           type="button"
           className={`tab-btn ${activeSubView === "effectiveness" ? "active" : ""}`}
@@ -406,7 +446,47 @@ export function AnalyticsView() {
             </div>
           )}
 
-          {/* 3. Vue Efficacité */}
+          {/* 3. Erreurs par employé — manager/admin seulement */}
+          {activeSubView === "employees" && (user?.role === "manager" || user?.role === "admin") && (
+            <div className="card" data-testid="employee-error-stats">
+              <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1rem" }}>👥 Types d'erreurs par employé</h3>
+              <p style={{ margin: "0 0 1rem 0", fontSize: "0.8rem", color: "var(--color-text-muted)" }}>
+                Donnée opérationnelle destinée à orienter la formation et l'amélioration des processus. Aucun courriel n'est affiché.
+              </p>
+              {employeeErrors.length === 0 ? (
+                <p style={{ color: "var(--color-text-muted)", margin: 0 }}>Aucune erreur attribuée dans la période sélectionnée.</p>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.85rem" }}>
+                    <thead>
+                      <tr>
+                        <th style={{ textAlign: "left", padding: "0.5rem" }}>Employé</th>
+                        <th style={{ textAlign: "left", padding: "0.5rem" }}>Type d'erreur</th>
+                        <th style={{ textAlign: "right", padding: "0.5rem" }}>Nombre</th>
+                        <th style={{ textAlign: "left", padding: "0.5rem" }}>Dernier dossier</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {employeeErrors.map((item) => (
+                        <tr key={`${item.userId}-${item.subcategoryId}`} style={{ borderTop: "1px solid var(--color-border)" }}>
+                          <td style={{ padding: "0.5rem" }}>{item.displayName}{item.active ? "" : " (inactif)"}</td>
+                          <td style={{ padding: "0.5rem" }}>{getSubcategoryLabel(item.subcategoryId)}</td>
+                          <td style={{ padding: "0.5rem", textAlign: "right", fontWeight: 700 }}>{item.count}</td>
+                          <td style={{ padding: "0.5rem" }}>
+                            <button type="button" className="btn btn-secondary" style={{ minHeight: "32px", padding: "0.25rem 0.5rem" }} onClick={() => onSelectIssue(item.latestIssuePublicId)}>
+                              {item.latestIssuePublicId}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 4. Vue Efficacité */}
           {activeSubView === "effectiveness" && effectiveness && (
             <div>
               <div className="card" style={{ marginBottom: "1rem", textAlign: "center", padding: "1.5rem" }}>
@@ -440,7 +520,7 @@ export function AnalyticsView() {
             </div>
           )}
 
-          {/* 4. Vue Révisions dues */}
+          {/* 5. Vue Révisions dues */}
           {activeSubView === "reviews" && (
             <div className="card">
               <h3 style={{ margin: "0 0 0.75rem 0", fontSize: "1rem" }}>

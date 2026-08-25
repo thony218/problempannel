@@ -12,6 +12,7 @@
  */
 export const PATHS = {
   root: "/",
+  home: "/accueil",
   newIssue: "/nouveau",
   registry: "/registre",
   issueDetail: "/dossiers/:publicId",

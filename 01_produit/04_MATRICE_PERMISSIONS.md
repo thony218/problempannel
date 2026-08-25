@@ -12,6 +12,7 @@
 | Corriger son issue | oui | oui | oui | employee: créateur + new |
 | Changer priorité | non | oui | oui | — |
 | Assigner owner | non | oui | oui | — |
+| Attribuer l'erreur à un employé | non | oui | oui | référence utilisateur valide |
 | Changer dueDate | non | oui | oui | — |
 | new → autre | non | oui | oui | sous-catégorie requise |
 | inProgress ↔ waiting | oui | oui | oui | employee seulement si owner |
@@ -28,6 +29,7 @@
 | Lier similar | non | oui | oui | — |
 | Analytics générales | oui | oui | oui | — |
 | Charge par responsable | non | oui | oui | — |
+| Erreurs par employé | non | oui | oui | sans courriel ni texte libre |
 | Gérer users/référentiels | non | non | oui | — |
 | Caviarder | non | non | oui | procédure R2 |
 | Hard-delete issue | non | non | non | hors V1 |

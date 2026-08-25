@@ -21,6 +21,9 @@ describe("GET /api/meta", () => {
 
   it("returns only active reference items and the expected config", async () => {
     await env.DB.prepare(
+      "INSERT INTO users (email, display_name, role, active) VALUES ('inactive@example.test', 'Ancien employé', 'employee', 0)"
+    ).run();
+    await env.DB.prepare(
       "INSERT INTO locations (code, label, active) VALUES ('INACTIVE-LOC', 'Succursale inactive', 0)"
     ).run();
     await env.DB.prepare(
@@ -42,6 +45,7 @@ describe("GET /api/meta", () => {
         categories: Array<{ id: number; code: string }>;
         subcategories: Array<{ code: string; parentId?: number | null }>;
         impactTypes: unknown[];
+        users: Array<Record<string, unknown> & { id: number; displayName: string; active: boolean }>;
         config: {
           businessTimeZone: string;
           maxAttachmentBytes: number;
@@ -53,6 +57,9 @@ describe("GET /api/meta", () => {
     }>();
 
     expect(body.data.locations.some((l) => l.code === "INACTIVE-LOC")).toBe(false);
+    expect(body.data.users.map((u) => u.displayName)).toEqual(["Meta Tester", "Ancien employé"]);
+    expect(body.data.users.every((u) => !("email" in u))).toBe(true);
+    expect(body.data.users.find((u) => u.displayName === "Ancien employé")?.active).toBe(false);
     expect(body.data.locations[0].parentId).toBeUndefined();
     expect(body.data.config).toEqual({
       businessTimeZone: "America/Toronto",

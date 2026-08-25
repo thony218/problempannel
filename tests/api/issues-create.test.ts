@@ -97,7 +97,7 @@ describe("POST /api/issues", () => {
   it("S01 — creates an issue with a valid location and returns 201 + ETag", async () => {
     const res = await post(validPayload());
     expect(res.status).toBe(201);
-    expect(res.headers.get("ETag")).toMatch(/^issue-\d+-v1$/);
+    expect(res.headers.get("ETag")).toMatch(/^"issue-\d+-v1"$/);
 
     const body = await res.json<{ ok: true; data: { publicId: string; status: string; rowVersion: number } }>();
     expect(body.data.publicId).toMatch(/^INC-\d{6,}$/);

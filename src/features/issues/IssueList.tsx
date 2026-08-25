@@ -53,18 +53,24 @@ export function IssueList() {
   const priority = param("priority", "all");
   const locationId: number | "" = param("locationId") ? Number(param("locationId")) : "";
   const categoryId: number | "" = param("categoryId") ? Number(param("categoryId")) : "";
+  const ownerUserId: number | "" = param("ownerUserId") ? Number(param("ownerUserId")) : "";
+  const errorActorUserId: number | "" = param("errorActorUserId") ? Number(param("errorActorUserId")) : "";
+  const sort = param("sort", "newest");
 
   const setQuery = (value: string) => setParam("q", value);
   const setStatus = (value: string) => setParam("status", value, "all");
   const setPriority = (value: string) => setParam("priority", value, "all");
   const setLocationId = (value: number | "") => setParam("locationId", value === "" ? "" : String(value));
   const setCategoryId = (value: number | "") => setParam("categoryId", value === "" ? "" : String(value));
+  const setOwnerUserId = (value: number | "") => setParam("ownerUserId", value === "" ? "" : String(value));
+  const setErrorActorUserId = (value: number | "") => setParam("errorActorUserId", value === "" ? "" : String(value));
+  const setSort = (value: string) => setParam("sort", value, "newest");
 
   // Ouvrir le panneau d'emblée si l'URL porte déjà des filtres : sur un lien
   // partagé ou un retour depuis un dossier, l'utilisateur doit voir de quoi la
   // liste est filtrée sans avoir à déplier quoi que ce soit.
   const [showFilters, setShowFilters] = useState<boolean>(
-    () => status !== "all" || priority !== "all" || locationId !== "" || categoryId !== ""
+    () => status !== "all" || priority !== "all" || locationId !== "" || categoryId !== "" || ownerUserId !== "" || errorActorUserId !== ""
   );
 
   // La recherche est dé-rebondie avant l'appel réseau, pas avant l'écriture
@@ -106,6 +112,9 @@ export function IssueList() {
         if (priority !== "all") {
           params.set("priority", priority);
         }
+        if (ownerUserId !== "") params.set("ownerUserId", String(ownerUserId));
+        if (errorActorUserId !== "") params.set("errorActorUserId", String(errorActorUserId));
+        params.set("sort", sort);
 
         const res = await apiFetch(`/api/issues?${params.toString()}`, {
           headers: { Accept: "application/json" },
@@ -135,7 +144,7 @@ export function IssueList() {
         setLoadingMore(false);
       }
     },
-    [debouncedQuery, status, locationId, categoryId, priority]
+    [debouncedQuery, status, locationId, categoryId, priority, ownerUserId, errorActorUserId, sort]
   );
 
   useEffect(() => {
@@ -154,7 +163,7 @@ export function IssueList() {
   };
 
   const hasActiveFilters =
-    debouncedQuery !== "" || status !== "all" || locationId !== "" || categoryId !== "" || priority !== "all";
+    debouncedQuery !== "" || status !== "all" || locationId !== "" || categoryId !== "" || priority !== "all" || ownerUserId !== "" || errorActorUserId !== "";
 
   // Helpers de rendu
   const getLocationLabel = (locId?: number) => {
@@ -171,9 +180,19 @@ export function IssueList() {
    */
   const getOwnerLabel = (ownerUserId?: number | null) => {
     if (!ownerUserId) return "Non assigné";
-    // /api/meta ne publie pas l'annuaire des utilisateurs : à défaut du nom,
-    // l'identifiant reste une information exploitable.
-    return user && user.id === ownerUserId ? `${user.displayName} (vous)` : `Responsable #${ownerUserId}`;
+    const directoryUser = meta?.users.find((candidate) => candidate.id === ownerUserId);
+    if (user && user.id === ownerUserId) return `${user.displayName} (vous)`;
+    return directoryUser
+      ? `${directoryUser.displayName}${directoryUser.active ? "" : " (inactif)"}`
+      : `Responsable #${ownerUserId}`;
+  };
+
+  const getErrorActorLabel = (errorActorUserId?: number | null) => {
+    if (!errorActorUserId) return "Attribution inconnue";
+    const directoryUser = meta?.users.find((candidate) => candidate.id === errorActorUserId);
+    return directoryUser
+      ? `${directoryUser.displayName}${directoryUser.active ? "" : " (inactif)"}`
+      : `Employé #${errorActorUserId}`;
   };
 
   /** Échéance dépassée = date métier strictement postérieure, cf. 08_DEFINITIONS_ANALYTIQUES.md. */
@@ -215,9 +234,18 @@ export function IssueList() {
       {/* Barre d'outils supérieure */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem", marginBottom: "1rem" }}>
         <h2 style={{ margin: 0, fontSize: "1.35rem" }}>Registre des incidents</h2>
-        <button type="button" className="btn btn-primary" onClick={() => navigate(PATHS.newIssue)} data-testid="btn-new-from-list">
-          ➕ Nouveau
-        </button>
+        <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+          <label htmlFor="issue-sort" style={{ fontSize: "0.85rem", color: "var(--color-text-muted)" }}>Trier</label>
+          <select id="issue-sort" className="form-control" value={sort} onChange={(e) => setSort(e.target.value)} data-testid="issue-sort" style={{ minWidth: "145px" }}>
+            <option value="newest">Plus récents</option>
+            <option value="oldest">Plus anciens</option>
+            <option value="priority">Priorité</option>
+            <option value="dueDate">Échéance</option>
+          </select>
+          <button type="button" className="btn btn-primary" onClick={() => navigate(PATHS.newIssue)} data-testid="btn-new-from-list">
+            ➕ Nouveau
+          </button>
+        </div>
       </div>
 
       {/* Barre de recherche et bouton de filtres */}
@@ -311,6 +339,26 @@ export function IssueList() {
                   <option value="normal">Normale</option>
                 </select>
               </div>
+
+              <div className="form-group" style={{ marginBottom: "0.5rem" }}>
+                <label htmlFor="filter-owner" className="form-label">Responsable</label>
+                <select id="filter-owner" className="form-control" value={ownerUserId} onChange={(e) => setOwnerUserId(e.target.value ? Number(e.target.value) : "")}>
+                  <option value="">Tous les responsables</option>
+                  {meta?.users.map((directoryUser) => (
+                    <option key={directoryUser.id} value={directoryUser.id}>{directoryUser.displayName}{directoryUser.active ? "" : " (inactif)"}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group" style={{ marginBottom: "0.5rem" }}>
+                <label htmlFor="filter-error-actor" className="form-label">Employé concerné</label>
+                <select id="filter-error-actor" className="form-control" value={errorActorUserId} onChange={(e) => setErrorActorUserId(e.target.value ? Number(e.target.value) : "")}>
+                  <option value="">Tous les employés</option>
+                  {meta?.users.map((directoryUser) => (
+                    <option key={directoryUser.id} value={directoryUser.id}>{directoryUser.displayName}{directoryUser.active ? "" : " (inactif)"}</option>
+                  ))}
+                </select>
+              </div>
             </div>
 
             {hasActiveFilters && (
@@ -393,6 +441,9 @@ export function IssueList() {
                 <span>🏷️ {getCategoryLabel(issue.categoryId)}</span>
                 <span data-testid={`issue-owner-${issue.publicId}`}>
                   👤 {getOwnerLabel(issue.ownerUserId)}
+                </span>
+                <span data-testid={`issue-error-actor-${issue.publicId}`}>
+                  🎯 Employé : {getErrorActorLabel(issue.errorActorUserId)}
                 </span>
                 {issue.dueDate && (
                   <span

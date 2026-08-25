@@ -59,3 +59,15 @@ Seuil :
 ≥3 dossiers sur 90 jours.
 
 Le dashboard doit distinguer visuellement les deux types.
+
+## Erreurs par employé
+
+Source : `issues.error_actor_user_id`.
+
+Groupe :
+`error_actor_user_id + subcategory_id`.
+
+Seuls les dossiers portant une attribution et une sous-catégorie sont inclus.
+La vue est réservée aux gestionnaires et administrateurs. Elle publie le nom
+affiché, le statut actif/inactif, la sous-catégorie, le nombre de dossiers et
+le dossier le plus récent; jamais le courriel ni un texte libre.

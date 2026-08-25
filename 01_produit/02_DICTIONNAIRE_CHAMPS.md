@@ -19,6 +19,7 @@
 | Priorité | priority | priority | enum | oui | oui | création; manager+ ensuite |
 | Statut | status | status | enum | auto new | resolved | manager+ |
 | Responsable | ownerUserId | owner_user_id | int|null | non | non | manager+ |
+| Employé concerné par l'erreur | errorActorUserId | error_actor_user_id | int|null | non | non | manager+ |
 | Échéance | dueDate | due_date | date|null | non | non | manager+ |
 | Cause état | causeStatus | cause_status | enum|null | non | oui | manager+ |
 | Cause | causeSummary | cause_summary | text|null | non | oui | manager+ |

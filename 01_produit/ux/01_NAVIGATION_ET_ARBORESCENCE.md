@@ -1,7 +1,7 @@
 # Navigation et arborescence
 
-> Version : **4.0.0**  
-> Dernière mise à jour : **2026-08-24**  
+> Version : **5.0.0**
+> Dernière mise à jour : **2026-08-25**
 > Propriétaire : **Responsable UX**  
 > Statut : **FROZEN**
 
@@ -27,6 +27,7 @@ Nouveau
 Analyse
 ├── Vue synthèse
 ├── Récurrences
+├── Erreurs par employé (gestionnaire/admin)
 ├── Efficacité
 └── Révisions dues
 

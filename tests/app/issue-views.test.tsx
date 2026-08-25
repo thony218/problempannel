@@ -15,6 +15,7 @@ import { LinksSection } from "../../src/features/links/LinksSection";
 import { AnalyticsView } from "../../src/features/analytics/AnalyticsView";
 import { AdminView } from "../../src/features/admin/AdminView";
 import { RedactModal } from "../../src/features/admin/RedactModal";
+import { HomeView } from "../../src/features/home/HomeView";
 
 /**
  * Rendu HTML réel des écrans (LIST-04, DETAIL-02, COM-03, ATT-03, ACT-03,
@@ -41,6 +42,10 @@ const META: AuthContextValue["meta"] = {
   categories: [{ id: 1, code: "recv", label: "Réception", active: true, sortOrder: 1 }],
   subcategories: [{ id: 1, code: "price", label: "Prix", active: true, sortOrder: 1, parentId: 1 }],
   impactTypes: [{ id: 1, code: "time_lost", label: "Temps perdu", active: true, sortOrder: 1 }],
+  users: [
+    { id: 1, displayName: "Utilisateur employee", role: "employee", active: true },
+    { id: 9, displayName: "Utilisateur manager", role: "manager", active: true },
+  ],
   config: {
     businessTimeZone: "America/Toronto",
     maxAttachmentBytes: 10485760,
@@ -82,6 +87,7 @@ function baseIssue(overrides: Partial<Issue> = {}): Issue {
     status: "new",
     createdByUserId: 1,
     ownerUserId: null,
+    errorActorUserId: null,
     dueDate: null,
     waitingOn: null,
     causeStatus: null,
@@ -171,7 +177,7 @@ describe("Modale d'édition — permissions et conflit (FLOW-05, FLOW-06)", () =
     const html = renderAt(
       <EditIssueModal
         issue={baseIssue()}
-        etag="issue-1-v1"
+        etag={'"issue-1-v1"'}
         onClose={() => {}}
         onSuccess={async () => {}}
         onReload={async () => {}}
@@ -181,6 +187,8 @@ describe("Modale d'édition — permissions et conflit (FLOW-05, FLOW-06)", () =
     expect(html).toContain('data-testid="form-edit-issue"');
     expect(html).toContain('data-testid="select-edit-status"');
     expect(html).toContain('data-testid="select-edit-priority"');
+    expect(html).toContain('data-testid="select-edit-error-actor"');
+    expect(html).toContain("Utilisateur employee");
     expect(html).toContain("INC-000001");
   });
 
@@ -193,7 +201,7 @@ describe("Modale d'édition — permissions et conflit (FLOW-05, FLOW-06)", () =
     const html = renderAt(
       <EditIssueModal
         issue={baseIssue({ createdByUserId: 1 })}
-        etag="issue-1-v1"
+        etag={'"issue-1-v1"'}
         onClose={() => {}}
         onSuccess={async () => {}}
         onReload={async () => {}}
@@ -203,6 +211,7 @@ describe("Modale d'édition — permissions et conflit (FLOW-05, FLOW-06)", () =
     expect(html).toContain('data-testid="form-edit-issue"');
     expect(html).not.toContain('data-testid="select-edit-status"');
     expect(html).not.toContain('data-testid="select-edit-priority"');
+    expect(html).not.toContain('data-testid="select-edit-error-actor"');
   });
 
   /**
@@ -214,7 +223,7 @@ describe("Modale d'édition — permissions et conflit (FLOW-05, FLOW-06)", () =
     const html = renderAt(
       <EditIssueModal
         issue={baseIssue({ status: "inProgress", subcategoryId: 1 })}
-        etag="issue-1-v2"
+        etag={'"issue-1-v2"'}
         onClose={() => {}}
         onSuccess={async () => {}}
         onReload={async () => {}}
@@ -234,7 +243,7 @@ describe("Modale d'édition — permissions et conflit (FLOW-05, FLOW-06)", () =
     const html = renderAt(
       <EditIssueModal
         issue={baseIssue()}
-        etag="issue-1-v1"
+        etag={'"issue-1-v1"'}
         onClose={() => {}}
         onSuccess={async () => {}}
         onReload={async () => {}}
@@ -280,6 +289,28 @@ describe("ANA-05: Rendu du tableau de bord Analytics", () => {
     expect(html).toContain('data-testid="subtab-recurring"');
     expect(html).toContain('data-testid="subtab-effectiveness"');
     expect(html).toContain('data-testid="subtab-reviews"');
+    expect(html).toContain('data-testid="subtab-employees"');
+  });
+
+  it("hides employee error analytics from an employee", () => {
+    mockAuthAs("employee", 1);
+    const html = renderAt(<AnalyticsView />, "/analyse?vue=employees");
+    expect(html).not.toContain('data-testid="subtab-employees"');
+    expect(html).toMatch(/class="tab-btn active"[^>]*data-testid="subtab-summary"/);
+  });
+});
+
+describe("S41: Accueil opérationnel", () => {
+  it("renders the four shortcuts with shareable destinations", () => {
+    mockAuthAs("employee", 1);
+    const html = renderAt(<HomeView />, "/accueil");
+
+    expect(html).toContain('data-testid="home-view"');
+    expect(html).toContain('data-testid="home-my-issues"');
+    expect(html).toContain('data-testid="home-urgent"');
+    expect(html).toContain('data-testid="home-waiting"');
+    expect(html).toContain('data-testid="home-reviews"');
+    expect(html).toContain("ownerUserId=1");
   });
 });
 
@@ -342,6 +373,7 @@ describe("Routage et état d'URL (S39, S41, liens profonds)", () => {
 
     // Le champ de recherche est pré-rempli depuis l'URL.
     expect(html).toMatch(/data-testid="search-input"[^>]*value="palette"/);
+    expect(html).toContain('data-testid="issue-sort"');
     // Les sélecteurs positionnés sur la valeur de l'URL.
     expect(html).toContain('value="inProgress" selected');
     expect(html).toContain('value="urgent" selected');

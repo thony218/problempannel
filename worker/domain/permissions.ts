@@ -15,6 +15,7 @@ export interface ValidateIssueUpdatePermissionsParams {
 const MANAGER_ADMIN_ONLY_FIELDS: (keyof UpdateIssueInput)[] = [
   "priority",
   "ownerUserId",
+  "errorActorUserId",
   "dueDate",
   "causeStatus",
   "causeSummary",

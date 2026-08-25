@@ -1,5 +1,7 @@
 export interface IssueCursorPayload {
   id: number;
+  sort?: "newest" | "oldest" | "priority" | "dueDate";
+  sortKey?: number | string | null;
 }
 
 /**
@@ -28,16 +30,22 @@ export function decodeCursor(cursor: string): IssueCursorPayload | null {
     }
     const json = atob(base64);
     const parsed = JSON.parse(json);
-    if (
-      parsed &&
-      typeof parsed === "object" &&
-      typeof parsed.id === "number" &&
-      Number.isInteger(parsed.id) &&
-      parsed.id > 0
-    ) {
-      return { id: parsed.id };
+    if (!parsed || typeof parsed !== "object" || !Number.isInteger(parsed.id) || parsed.id <= 0) return null;
+
+    if (parsed.sort === undefined) return { id: parsed.id };
+    if (!["newest", "oldest", "priority", "dueDate"].includes(parsed.sort)) return null;
+
+    if (parsed.sort === "priority") {
+      if (!Number.isInteger(parsed.sortKey) || parsed.sortKey < 1 || parsed.sortKey > 3) return null;
+      return { id: parsed.id, sort: parsed.sort, sortKey: parsed.sortKey };
     }
-    return null;
+    if (parsed.sort === "dueDate") {
+      if (parsed.sortKey !== null && (typeof parsed.sortKey !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(parsed.sortKey))) {
+        return null;
+      }
+      return { id: parsed.id, sort: parsed.sort, sortKey: parsed.sortKey };
+    }
+    return { id: parsed.id, sort: parsed.sort };
   } catch {
     return null;
   }

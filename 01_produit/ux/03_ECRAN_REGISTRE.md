@@ -1,7 +1,7 @@
 # Écran Registre — spécification complète
 
-> Version : **4.0.0**  
-> Dernière mise à jour : **2026-08-24**  
+> Version : **5.0.0**
+> Dernière mise à jour : **2026-08-25**
 > Propriétaire : **Responsable UX**  
 > Statut : **FROZEN**
 
@@ -43,10 +43,11 @@ Ordre :
 5. catégorie;
 6. sous-catégorie;
 7. responsable;
-8. date;
-9. en retard;
-10. efficacité;
-11. révision due.
+8. employé concerné par l'erreur;
+9. date;
+10. en retard;
+11. efficacité;
+12. révision due.
 
 ## Tri
 
@@ -68,8 +69,13 @@ Toujours afficher :
 - status;
 - location;
 - catégorie;
+- employé concerné ou `Attribution inconnue`;
 - owner ou `Non assigné`;
 - dueDate si présente.
+
+Le responsable est la personne chargée du traitement. L'employé concerné est
+la personne à laquelle l'erreur observée est attribuée; ces deux notions ne
+doivent jamais être fusionnées.
 
 ## États
 

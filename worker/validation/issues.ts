@@ -8,6 +8,7 @@ export const impactInputSchema = z.strictObject({
 export const priorityValues = ["normal", "important", "urgent"] as const;
 export const issueStatusValues = ["new", "inProgress", "waiting", "resolved"] as const;
 export const effectivenessStatusValues = ["pending", "effective", "ineffective"] as const;
+export const issueSortValues = ["newest", "oldest", "priority", "dueDate"] as const;
 export const causeStatusValues = ["toVerify", "known"] as const;
 export const permanentCorrectionTypeValues = [
   "procedureUpdate",
@@ -74,6 +75,8 @@ export const listIssuesQuerySchema = z.object({
   departmentId: z.coerce.number().int().min(1).optional(),
   categoryId: z.coerce.number().int().min(1).optional(),
   ownerUserId: z.coerce.number().int().min(1).optional(),
+  errorActorUserId: z.coerce.number().int().min(1).optional(),
+  sort: z.enum(issueSortValues).default("newest"),
   from: z.string().regex(datePattern, "Format de date invalide (AAAA-MM-JJ attendu)").optional(),
   to: z.string().regex(datePattern, "Format de date invalide (AAAA-MM-JJ attendu)").optional(),
   overdue: z
@@ -111,6 +114,7 @@ export const updateIssueRequestSchema = z
     priority: z.enum(priorityValues).optional(),
     status: z.enum(issueStatusValues).optional(),
     ownerUserId: z.number().int().min(1).nullable().optional(),
+    errorActorUserId: z.number().int().min(1).nullable().optional(),
     dueDate: z.string().regex(datePattern, "Format de date invalide (AAAA-MM-JJ attendu)").nullable().optional(),
     causeStatus: z.enum(causeStatusValues).nullable().optional(),
     causeSummary: z.string().max(5000).nullable().optional(),

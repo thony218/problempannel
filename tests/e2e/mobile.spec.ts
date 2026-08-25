@@ -12,6 +12,7 @@ import { expect, test } from "@playwright/test";
 const WIDTHS = [320, 375, 430];
 
 const SCREENS: { name: string; path: string }[] = [
+  { name: "Accueil", path: "/accueil" },
   { name: "Registre", path: "/registre" },
   { name: "Nouveau dossier", path: "/nouveau" },
   { name: "Détail", path: "/dossiers/INC-000001" },
@@ -36,4 +37,22 @@ for (const width of WIDTHS) {
       ).toBeLessThanOrEqual(overflow.clientWidth);
     });
   }
+}
+
+for (const width of WIDTHS) {
+  test(`la modale d'attribution reste utilisable à ${width} px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.addInitScript(() => {
+      localStorage.setItem("registre.devUserEmail", "manager@example.test");
+    });
+    await page.goto("/dossiers/INC-000001");
+    await page.getByTestId("btn-open-edit-issue").click();
+
+    await expect(page.getByTestId("select-edit-error-actor")).toBeVisible();
+    const overflow = await page.evaluate(() => ({
+      scrollWidth: document.documentElement.scrollWidth,
+      clientWidth: document.documentElement.clientWidth,
+    }));
+    expect(overflow.scrollWidth).toBeLessThanOrEqual(overflow.clientWidth);
+  });
 }

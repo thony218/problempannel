@@ -17,6 +17,7 @@ function baseRow(overrides: Partial<IssueRow> = {}): IssueRow {
     priority: "normal",
     status: "new",
     owner_user_id: null,
+    error_actor_user_id: null,
     due_date: null,
     cause_status: null,
     cause_summary: null,
@@ -47,6 +48,7 @@ describe("mapIssueRow", () => {
     expect(issue.locationId).toBe(2);
     expect(issue.description).toContain("description");
     expect(issue.rowVersion).toBe(1);
+    expect(issue.errorActorUserId).toBeNull();
   });
 
   it("maps snake_case enum values to their camelCase API form", () => {

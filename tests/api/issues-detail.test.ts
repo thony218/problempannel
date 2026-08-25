@@ -96,7 +96,8 @@ describe("GET /api/issues/:publicId", () => {
 
     const res = await get(`/issues/${created.publicId}`);
     expect(res.status).toBe(200);
-    expect(res.headers.get("ETag")).toBe(`issue-${issueId}-v${created.rowVersion}`);
+    expect(res.headers.get("ETag")).toBe(`"issue-${issueId}-v${created.rowVersion}"`);
+    expect(res.headers.get("Cache-Control")).toContain("no-transform");
 
     const body = (await res.json()) as any;
     expect(body.ok).toBe(true);

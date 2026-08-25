@@ -83,6 +83,11 @@ export function AppShell() {
             <div className="user-badge-container">
               <span className="user-name">{user.displayName}</span>
               <span className={`role-badge ${user.role}`}>{roleLabel}</span>
+              {user.role === "admin" && (
+                <NavLink to={PATHS.admin} className="btn btn-secondary" data-testid="user-menu-admin" style={{ minHeight: "32px", padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}>
+                  ⚙️ Administration
+                </NavLink>
+              )}
             </div>
           )}
         </div>
@@ -90,20 +95,18 @@ export function AppShell() {
 
       <nav className="app-nav" aria-label="Navigation principale">
         <div className="nav-content">
-          <NavLink to={PATHS.newIssue} className={navClass} data-testid="tab-new">
-            ➕ Nouveau dossier
+          <NavLink to={PATHS.home} className={navClass} data-testid="tab-home">
+            🏠 Accueil
           </NavLink>
           <NavLink to={PATHS.registry} className={navClass} data-testid="tab-list">
             📑 Registre
           </NavLink>
+          <NavLink to={PATHS.newIssue} className={navClass} data-testid="tab-new">
+            ➕ Nouveau dossier
+          </NavLink>
           <NavLink to={PATHS.analytics} className={navClass} data-testid="tab-analytics">
             📊 Analyse
           </NavLink>
-          {user?.role === "admin" && (
-            <NavLink to={PATHS.admin} className={navClass} data-testid="tab-admin">
-              ⚙️ Administration
-            </NavLink>
-          )}
         </div>
       </nav>
 

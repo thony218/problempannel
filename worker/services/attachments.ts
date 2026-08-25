@@ -114,22 +114,37 @@ export async function uploadAttachment(
   });
 
   // 5. Enregistrement en base et trace d'audit dans une seule transaction (G-007)
-  const results = await db.batch<AttachmentRow>([
-    insertAttachmentStatement(db, {
-      issueId,
-      uploadedByUserId: actorUserId,
-      originalName: file.name,
-      contentType: file.type,
-      sizeBytes: file.size,
-      r2Key,
-    }),
-    insertHistoryEventForJustCreatedChildStatement(
-      db,
-      issueId,
-      { actorUserId, eventType: "attachment_uploaded", idPayloadKey: "attachmentId" },
-      "attachments"
-    ),
-  ]);
+  let results: D1Result<AttachmentRow>[];
+  try {
+    results = await db.batch<AttachmentRow>([
+      insertAttachmentStatement(db, {
+        issueId,
+        uploadedByUserId: actorUserId,
+        originalName: file.name,
+        contentType: file.type,
+        sizeBytes: file.size,
+        r2Key,
+      }),
+      insertHistoryEventForJustCreatedChildStatement(
+        db,
+        issueId,
+        { actorUserId, eventType: "attachment_uploaded", idPayloadKey: "attachmentId" },
+        "attachments"
+      ),
+    ]);
+  } catch (error) {
+    // La base est l'autorité du quota. Si le trigger atomique refuse une
+    // course concurrente après l'écriture R2, supprimer l'objet évite un
+    // orphelin. `R2.delete` est idempotent.
+    await bucket.delete(r2Key);
+    if (String(error).includes("ATTACHMENT_LIMIT_REACHED")) {
+      throw new AppError(
+        "ATTACHMENT_LIMIT_REACHED",
+        `Limite maximale de ${config.maxAttachmentsPerIssue} pièces jointes par dossier atteinte.`
+      );
+    }
+    throw error;
+  }
 
   const inserted = results[0]?.results?.[0];
   if (!inserted) {

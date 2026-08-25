@@ -24,6 +24,7 @@ issueRoutes.get("/issues/:publicId", requireUser, async (c) => {
     throw new AppError("NOT_FOUND", "Dossier introuvable.");
   }
   c.header("ETag", issueETag(parsePublicId(detail.issue.publicId) as number, detail.issue.rowVersion));
+  c.header("Cache-Control", "private, no-store, no-transform");
   return c.json(okBody(detail), 200);
 });
 
@@ -47,6 +48,7 @@ issueRoutes.patch("/issues/:publicId", requireUser, rateLimit("write"), async (c
     throw new AppError("NOT_FOUND", "Dossier introuvable.");
   }
   c.header("ETag", issueETag(parsePublicId(detail.issue.publicId) as number, detail.issue.rowVersion));
+  c.header("Cache-Control", "private, no-store, no-transform");
   return c.json(okBody(detail), 200);
 });
 
@@ -55,5 +57,6 @@ issueRoutes.post("/issues", requireUser, rateLimit("write"), async (c) => {
   const input = await parseJsonBody(c, createIssueRequestSchema);
   const issue = await createIssue(c.env.DB, c.get("user").id, input);
   c.header("ETag", issueETag(parsePublicId(issue.publicId) as number, issue.rowVersion));
+  c.header("Cache-Control", "private, no-store, no-transform");
   return c.json(okBody(issue), 201);
 });

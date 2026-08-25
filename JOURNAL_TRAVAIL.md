@@ -949,3 +949,56 @@ Le parcours E2E n'était pas écrivable avant que l'identité de développement 
 - **Prochain propriétaire** : propriétaire Cloudflare, pour effectuer une connexion réelle avec les administrateurs et confirmer la livraison des codes à usage unique.
 
 ---
+
+### 2026-08-25 — Attribution de l'employé concerné et fermeture locale V5
+
+- **Task IDs** : `V5-ATTR-01`, `V5-ATTR-02`, `V5-ATTR-03`, `V5-ATTR-04`, `V5-CLOSE-01`, `V5-CLOSE-02`, `V5-CLOSE-03`.
+- **Date** : 2026-08-25.
+- **Owner** : Codex, sur demande explicite du propriétaire (« attribuer un employé pour savoir quel employé fait quel type d'erreur » et compléter le projet).
+- **Commit(s)** : aucun; aucun commit, push ou déploiement n'a été autorisé dans cette intervention.
+- **Sauvegarde** : archive source + état Git créée avant la première modification dans `/Users/anthobruneau/Downloads/Back up Codex/registre_erreurs_v4_final_2026-08-25_attribution-employe-finalisation.tar.gz`. Une première copie interrompue pendant `node_modules` a été conservée sans remplacement dans `/Users/anthobruneau/Downloads/Back up Codex/registre_erreurs_v4_final_2026-08-24_attribution-employe-finalisation`.
+- **RFC** : `00_gouvernance/rfc/RFC-2026-001-attribution-employe-erreur.md`, classe R2, acceptée par la demande explicite du propriétaire. `ownerUserId` (responsable du traitement) reste distinct de `errorActorUserId` (employé concerné par l'erreur).
+- **Fichiers produits/modifiés** :
+  - contrat et gouvernance : RFC, dictionnaire, matrice de permissions, scénarios S53-S56, définitions analytiques, spécifications UX, backlog V5 et `contracts/openapi.yaml`;
+  - données/API : `migrations/0002_error_actor_and_attachment_quota.sql`, annuaire `/meta` sans courriel, champ/filtre/tri des dossiers, permissions et historique, agrégation `/analytics/errors-by-employee` réservée manager/admin;
+  - concurrence : ETag HTTP fort cité avec repli client et `If-Match` obligatoire; trigger D1 atomique du quota de 10 pièces jointes avec nettoyage de l'objet R2 refusé;
+  - interface : attribution dans la modale d'édition, noms sûrs au détail et au registre, filtre employé, quatre tris, vue analytique par employé, écran Accueil et Administration replacée dans le menu utilisateur;
+  - tests : API, mappers, curseurs, attribution/permissions, annuaire, analytique, concurrence R2, ETag client, rendus de rôles, Accueil et parcours Playwright.
+- **Commandes et résultats** :
+  - `wrangler 4.125.0`; `npm run db:migrate:local` → **PASS**, migration `0002_error_actor_and_attachment_quota.sql` appliquée uniquement au D1 local, 4 commandes;
+  - `npm run typecheck` → **PASS** (app, Worker, tests et E2E);
+  - `npm run test` → **PASS**, 234 tests dans 32 fichiers;
+  - `npm run test:e2e` → première exécution : 52 scénarios Chromium/mobile Chrome réussis, WebKit absent; `npx playwright install webkit` exécuté, puis seconde exécution → **78/78 PASS** sur Chromium, mobile Chrome et mobile Safari;
+  - vérifications responsives réelles à 320, 375 et 430 px sur Accueil, Registre, Nouveau, Détail, Analyse et modale d'attribution → aucun débordement horizontal;
+  - inspection navigateur intégrée sous identité gestionnaire → annuaire visible sans courriel, distinction responsable/employé visible, aucune erreur console;
+  - `git diff --check` → **PASS**;
+  - `npm run verify` → **PASS** : contrat valide (un avertissement historique documenté pour `/health` public), types générés, 234 tests et build Worker/client réussis.
+- **`npm run verify`** : **PASS** (exit 0).
+- **Staging / production testés** : non. Aucune migration distante, aucun push, aucun déploiement et aucune modification Cloudflare distante dans cette intervention.
+- **Limitations connues / dette** : le code et le D1 local sont prêts. La production actuellement déployée ne possède pas encore la migration `0002`; l'attribution ne doit pas être utilisée à distance avant migration + déploiement autorisés. Le gate de confidentialité et une recette authentifiée demeurent des preuves externes distinctes. Les modifications préexistantes de `package.json` et `package-lock.json` ont été préservées sans réécriture fonctionnelle.
+- **RFC ouverte** : non; RFC-2026-001 acceptée et implémentée localement.
+- **Prochain propriétaire** : propriétaire du projet pour autoriser explicitement, s'il le souhaite, le commit/push puis la sauvegarde D1 distante, la migration `0002`, le déploiement et la recette authentifiée conformément aux gates `OPS-04` à `OPS-07`.
+
+---
+
+### 2026-08-25 — Déploiement production de la dernière version via Wrangler
+
+- **Task IDs** : `OPS-07` (déploiement production), avec migration distante nécessaire pour la version `V5`.
+- **Date** : 2026-08-25.
+- **Owner** : Codex, sur demande explicite de l'utilisateur (« pousse la dernière version via le wrangler »).
+- **Commit(s)** : aucun; aucun commit ni push GitHub effectué.
+- **Sauvegarde** : archive complète créée avant l'intervention dans `/Users/anthobruneau/Downloads/Back up Codex/registre_erreurs_v4_final_2026-08-25_deploiement-wrangler.tar.gz`.
+- **Fichiers modifiés** : `JOURNAL_TRAVAIL.md` uniquement dans le cadre de cette consignation; les modifications applicatives locales préexistantes ont été préservées.
+- **Cloudflare modifié** : D1 `registre-erreurs-prod` et Worker `registre-erreurs` sur `problems.chamaran.com`.
+- **Commandes et résultats** :
+  - `npm run verify` → **PASS**, 234 tests dans 32 fichiers, typecheck et build réussis; un avertissement OpenAPI historique demeure sur `/health` public.
+  - `npx wrangler d1 migrations list DB --remote --env production` → migration `0002_error_actor_and_attachment_quota.sql` en attente.
+  - `npm run db:migrate:production` → **PASS**, 4 commandes exécutées; aucune migration restante après contrôle.
+  - `npm run build:production && npx wrangler deploy --env production --dry-run` → **PASS**, cible production confirmée, D1/R2/rate limits/variables Access présents.
+  - `npm run deploy:production` → **PASS**, Worker publié; version `2a0c0b69-2100-4800-b488-ce15410ae2e5`, trafic Wrangler observé à 100 %.
+  - `curl -sS -D - -o /dev/null https://problems.chamaran.com/api/health` → **302 Cloudflare Access** attendu.
+- **`npm run verify`** : **PASS** (exit 0).
+- **Staging testé** : non; contrôle effectué directement sur la production protégée. La recette authentifiée complète n'a pas été exécutée.
+- **Limitations connues / dette** : le `302` prouve le périmètre Access, pas le comportement authentifié de l'application. Le gate de confidentialité R2 reste non approuvé; aucune ouverture aux employés ni donnée réelle n'a été ajoutée. Les modifications locales restent non commitées et le remote GitHub n'a pas été modifié.
+- **RFC ouverte** : non; `RFC-2026-001` reste acceptée et implémentée.
+- **Prochain propriétaire** : propriétaire Cloudflare/projet, pour effectuer la recette authentifiée et approuver le gate de confidentialité avant toute ouverture aux employés ou saisie de données réelles.

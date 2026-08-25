@@ -1,7 +1,7 @@
 # Écran Détail — spécification complète
 
-> Version : **4.0.0**  
-> Dernière mise à jour : **2026-08-24**  
+> Version : **5.0.0**
+> Dernière mise à jour : **2026-08-25**
 > Propriétaire : **Responsable UX**  
 > Statut : **FROZEN**
 
@@ -29,10 +29,14 @@ Montréal · Achats et stock
 
 ### 2. Prise en charge
 - priorité;
+- employé concerné par l'erreur ou `Attribution inconnue`;
 - responsable;
 - échéance;
 - status;
 - waitingOn si waiting.
+
+L'employé concerné est distinct du responsable chargé de corriger le dossier.
+Seuls un gestionnaire ou un administrateur peut modifier cette attribution.
 
 ### 3. Analyse
 - causeStatus;

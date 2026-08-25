@@ -76,6 +76,7 @@ export interface IssueRow {
   priority: string;
   status: string;
   owner_user_id: number | null;
+  error_actor_user_id: number | null;
   due_date: string | null;
   cause_status: string | null;
   cause_summary: string | null;
@@ -99,7 +100,7 @@ export interface IssueRow {
 const ISSUE_COLUMNS =
   "id, occurred_on, created_at, updated_at, row_version, created_by_user_id, location_id, " +
   "department_id, category_id, subcategory_id, description, priority, status, owner_user_id, " +
-  "due_date, cause_status, cause_summary, immediate_solution, permanent_correction_type, " +
+  "error_actor_user_id, due_date, cause_status, cause_summary, immediate_solution, permanent_correction_type, " +
   "permanent_correction_summary, waiting_on_type, waiting_on_user_id, waiting_on_label, " +
   "final_result, prevention_learning, effectiveness_status, effectiveness_review_date, " +
   "resolved_at, resolved_by_user_id, redacted_at, redacted_by_user_id, redaction_reason";
@@ -134,6 +135,7 @@ export function mapIssueRow(row: IssueRow): ApiIssue {
     priority: row.priority as ApiIssue["priority"],
     status: STATUS_DB_TO_API[row.status],
     ownerUserId: row.owner_user_id,
+    errorActorUserId: row.error_actor_user_id,
     dueDate: row.due_date,
     causeStatus: row.cause_status ? CAUSE_STATUS_DB_TO_API[row.cause_status] : null,
     causeSummary: row.cause_summary,
@@ -183,6 +185,7 @@ export interface IssueColumnUpdates {
   priority?: string;
   status?: string;
   owner_user_id?: number | null;
+  error_actor_user_id?: number | null;
   due_date?: string | null;
   cause_status?: string | null;
   cause_summary?: string | null;
@@ -366,7 +369,7 @@ export async function insertIssue(db: D1Database, input: NewIssueInput): Promise
 }
 
 export interface ListIssuesDbParams {
-  cursorId?: number | null;
+  cursor?: { id: number; sort?: "newest" | "oldest" | "priority" | "dueDate"; sortKey?: number | string | null } | null;
   limit: number;
   q?: string;
   status?: ApiIssueStatus[];
@@ -375,6 +378,8 @@ export interface ListIssuesDbParams {
   departmentId?: number;
   categoryId?: number;
   ownerUserId?: number;
+  errorActorUserId?: number;
+  sort: "newest" | "oldest" | "priority" | "dueDate";
   from?: string;
   to?: string;
   overdue?: boolean;
@@ -400,9 +405,25 @@ export async function queryIssuesList(
   const whereClauses: string[] = [];
   const bindings: unknown[] = [];
 
-  if (typeof params.cursorId === "number" && params.cursorId > 0) {
-    whereClauses.push("id < ?");
-    bindings.push(params.cursorId);
+  const priorityRankSql = "CASE priority WHEN 'urgent' THEN 3 WHEN 'important' THEN 2 ELSE 1 END";
+
+  if (params.cursor) {
+    if (params.sort === "newest") {
+      whereClauses.push("id < ?");
+      bindings.push(params.cursor.id);
+    } else if (params.sort === "oldest") {
+      whereClauses.push("id > ?");
+      bindings.push(params.cursor.id);
+    } else if (params.sort === "priority") {
+      whereClauses.push(`(${priorityRankSql} < ? OR (${priorityRankSql} = ? AND id < ?))`);
+      bindings.push(params.cursor.sortKey, params.cursor.sortKey, params.cursor.id);
+    } else if (params.cursor.sortKey === null) {
+      whereClauses.push("due_date IS NULL AND id < ?");
+      bindings.push(params.cursor.id);
+    } else {
+      whereClauses.push("(due_date > ? OR (due_date = ? AND id < ?) OR due_date IS NULL)");
+      bindings.push(params.cursor.sortKey, params.cursor.sortKey, params.cursor.id);
+    }
   }
 
   if (params.status && params.status.length > 0) {
@@ -438,6 +459,11 @@ export async function queryIssuesList(
   if (params.ownerUserId) {
     whereClauses.push("owner_user_id = ?");
     bindings.push(params.ownerUserId);
+  }
+
+  if (params.errorActorUserId) {
+    whereClauses.push("error_actor_user_id = ?");
+    bindings.push(params.errorActorUserId);
   }
 
   if (params.from) {
@@ -492,7 +518,15 @@ export async function queryIssuesList(
 
   const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
   const fetchLimit = params.limit + 1;
-  const sql = `SELECT ${ISSUE_COLUMNS} FROM issues ${whereSql} ORDER BY id DESC LIMIT ?`;
+  const orderBy =
+    params.sort === "oldest"
+      ? "id ASC"
+      : params.sort === "priority"
+        ? `${priorityRankSql} DESC, id DESC`
+        : params.sort === "dueDate"
+          ? "due_date IS NULL ASC, due_date ASC, id DESC"
+          : "id DESC";
+  const sql = `SELECT ${ISSUE_COLUMNS} FROM issues ${whereSql} ORDER BY ${orderBy} LIMIT ?`;
   bindings.push(fetchLimit);
 
   const stmt = db.prepare(sql).bind(...bindings);
@@ -507,4 +541,3 @@ export async function queryIssuesList(
     hasMore,
   };
 }
-

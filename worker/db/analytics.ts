@@ -4,6 +4,7 @@ import { toPublicId } from "../domain/publicId";
 export type ApiAnalyticsSummary = components["schemas"]["AnalyticsSummary"];
 export type ApiRecurringGroup = components["schemas"]["RecurringGroup"];
 export type ApiEffectiveness = components["schemas"]["Effectiveness"];
+export type ApiEmployeeErrorStat = components["schemas"]["EmployeeErrorStat"];
 
 export interface AnalyticsFilterParams {
   dateFrom?: string;
@@ -246,4 +247,71 @@ export async function fetchEffectiveness(
     ineffective,
     effectivenessRate,
   };
+}
+
+/**
+ * Agrégation opérationnelle par employé concerné et type précis d'erreur.
+ * La jointure ne sélectionne volontairement pas `users.email`.
+ */
+export async function fetchErrorsByEmployee(
+  db: D1Database,
+  filters: AnalyticsFilterParams
+): Promise<ApiEmployeeErrorStat[]> {
+  const whereClauses = ["i.error_actor_user_id IS NOT NULL", "i.subcategory_id IS NOT NULL"];
+  const binds: (number | string)[] = [];
+
+  if (filters.locationId !== undefined) {
+    whereClauses.push("i.location_id = ?");
+    binds.push(filters.locationId);
+  }
+  if (filters.departmentId !== undefined) {
+    whereClauses.push("i.department_id = ?");
+    binds.push(filters.departmentId);
+  }
+  if (filters.categoryId !== undefined) {
+    whereClauses.push("i.category_id = ?");
+    binds.push(filters.categoryId);
+  }
+  if (filters.dateFrom !== undefined) {
+    whereClauses.push("i.occurred_on >= ?");
+    binds.push(filters.dateFrom);
+  }
+  if (filters.dateTo !== undefined) {
+    whereClauses.push("i.occurred_on <= ?");
+    binds.push(filters.dateTo);
+  }
+
+  const result = await db
+    .prepare(
+      `SELECT
+         u.id AS user_id,
+         u.display_name,
+         u.active,
+         i.subcategory_id,
+         COUNT(*) AS count,
+         MAX(i.id) AS latest_issue_id
+       FROM issues i
+       JOIN users u ON u.id = i.error_actor_user_id
+       WHERE ${whereClauses.join(" AND ")}
+       GROUP BY u.id, u.display_name, u.active, i.subcategory_id
+       ORDER BY count DESC, u.display_name COLLATE NOCASE ASC, i.subcategory_id ASC`
+    )
+    .bind(...binds)
+    .all<{
+      user_id: number;
+      display_name: string;
+      active: number;
+      subcategory_id: number;
+      count: number;
+      latest_issue_id: number;
+    }>();
+
+  return (result.results || []).map((row) => ({
+    userId: row.user_id,
+    displayName: row.display_name,
+    active: row.active === 1,
+    subcategoryId: row.subcategory_id,
+    count: row.count,
+    latestIssuePublicId: toPublicId(row.latest_issue_id),
+  }));
 }

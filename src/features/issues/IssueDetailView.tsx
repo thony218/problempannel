@@ -11,6 +11,7 @@ import { RedactModal } from "../admin/RedactModal";
 import { apiFetch } from "../../shared/apiClient";
 import { useNavigate, useParams } from "react-router";
 import { PATHS, issueDetailPath } from "../../routes/paths";
+import { responseIssueEtag } from "../../shared/issueEtag";
 
 export type IssueDetail = components["schemas"]["IssueDetail"];
 export type IssueStatus = components["schemas"]["IssueStatus"];
@@ -69,12 +70,13 @@ export function IssueDetailView() {
         throw new Error(`Erreur lors de la récupération du dossier (${res.status}).`);
       }
 
-      setEtag(res.headers.get("ETag"));
+      const responseEtag = res.headers.get("ETag");
       const body = (await res.json()) as components["schemas"]["IssueDetailResponse"];
       if (!body.ok || !body.data) {
         throw new Error("Réponse inattendue du serveur.");
       }
 
+      setEtag(responseIssueEtag(responseEtag, body.data.issue.publicId, body.data.issue.rowVersion));
       setDetail(body.data);
     } catch (err: any) {
       setError(err.message || "Impossible de charger le dossier.");
@@ -143,6 +145,14 @@ export function IssueDetailView() {
 
   const getImpactTypeLabel = (typeId: number) => {
     return meta?.impactTypes.find((it) => it.id === typeId)?.label || `Impact #${typeId}`;
+  };
+
+  const getUserLabel = (userId?: number | null, emptyLabel = "Non assigné") => {
+    if (!userId) return emptyLabel;
+    const directoryUser = meta?.users.find((candidate) => candidate.id === userId);
+    return directoryUser
+      ? `${directoryUser.displayName}${directoryUser.active ? "" : " (inactif)"}`
+      : `Utilisateur #${userId}`;
   };
 
   const getStatusBadge = (st: IssueStatus) => {
@@ -311,7 +321,11 @@ export function IssueDetailView() {
               </div>
               <div>
                 <span style={{ color: "var(--color-text-muted)", display: "block" }}>Responsable assigné :</span>
-                <strong>{issue.ownerUserId ? `Utilisateur #${issue.ownerUserId}` : "Non assigné"}</strong>
+                <strong>{getUserLabel(issue.ownerUserId)}</strong>
+              </div>
+              <div data-testid="issue-error-actor">
+                <span style={{ color: "var(--color-text-muted)", display: "block" }}>Employé concerné par l'erreur :</span>
+                <strong>{getUserLabel(issue.errorActorUserId, "Attribution inconnue")}</strong>
               </div>
               <div>
                 <span style={{ color: "var(--color-text-muted)", display: "block" }}>Date d'échéance :</span>
@@ -359,7 +373,7 @@ export function IssueDetailView() {
                 </p>
                 {issue.waitingOn.type === "user" && (
                   <p style={{ margin: 0 }}>
-                    <strong>Utilisateur attendu :</strong> Utilisateur #{issue.waitingOn.userId}
+                    <strong>Utilisateur attendu :</strong> {getUserLabel(issue.waitingOn.userId, "Non défini")}
                   </p>
                 )}
                 {(issue.waitingOn.type === "customer" || issue.waitingOn.type === "supplier") && (
@@ -433,7 +447,7 @@ export function IssueDetailView() {
                 </div>
                 <div>
                   <span style={{ color: "var(--color-text-muted)", display: "block" }}>Résolu par :</span>
-                  <strong>{issue.resolvedByUserId ? `Utilisateur #${issue.resolvedByUserId}` : "N/A"}</strong>
+                  <strong>{getUserLabel(issue.resolvedByUserId, "N/A")}</strong>
                 </div>
                 <div>
                   <span style={{ color: "var(--color-text-muted)", display: "block" }}>Évaluation d'efficacité :</span>

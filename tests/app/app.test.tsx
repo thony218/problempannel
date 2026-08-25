@@ -104,7 +104,28 @@ describe("AppShell — états de session (META-02)", () => {
     expect(html).not.toContain(">manager<");
     expect(html).toContain('data-testid="tab-new"');
     expect(html).toContain('data-testid="tab-list"');
+    expect(html).toContain('data-testid="tab-home"');
+    expect(html).toContain('data-testid="tab-analytics"');
+    expect(html).not.toContain('data-testid="user-menu-admin"');
     expect(html).toContain("child-content");
+  });
+
+  it("keeps administration as a secondary destination visible only to admins", () => {
+    mockAuth({
+      user: {
+        id: 3,
+        email: "admin@example.test",
+        displayName: "Admin locale",
+        role: "admin",
+        active: true,
+        defaultLocationId: null,
+        defaultDepartmentId: null,
+      },
+    });
+
+    const html = renderShell("/accueil");
+    expect(html).toContain('data-testid="user-menu-admin"');
+    expect(html).toContain('href="/administration"');
   });
 
   it("marks the active tab so the current destination is visible", () => {

@@ -186,6 +186,47 @@ describe("ATT-01 & ATT-02: Upload et gestion des pièces jointes R2 (S17-S22)", 
     expect(body.error.code).toBe("ATTACHMENT_LIMIT_REACHED");
   });
 
+  it("S55: atomically caps concurrent uploads and removes the rejected R2 object", async () => {
+    const { publicId } = await createIssue();
+    const issueId = Number(publicId.replace("INC-", ""));
+
+    for (let i = 1; i <= 9; i++) {
+      await env.DB.prepare(
+        `INSERT INTO attachments (issue_id, uploaded_by_user_id, original_name, content_type, size_bytes, r2_key)
+         VALUES (?, ?, ?, 'image/jpeg', 100, ?)`
+      )
+        .bind(issueId, employeeId, `existing_${i}.jpg`, `existing_key_${i}`)
+        .run();
+    }
+
+    // Le faux bucket R2 de Miniflare survit aux DELETE SQL du beforeEach.
+    // Mesurer le delta isole donc les deux téléversements de cette course.
+    const objectsBefore = await env.ATTACHMENTS.list({ prefix: `issues/${issueId}/` });
+
+    const upload = (name: string) => {
+      const formData = new FormData();
+      formData.append("file", jpegFile(name, name));
+      return app.request(
+        `http://local/api/issues/${publicId}/attachments`,
+        { method: "POST", headers: EMPLOYEE_HEADER, body: formData },
+        env
+      );
+    };
+
+    const responses = await Promise.all([upload("race_a.jpg"), upload("race_b.jpg")]);
+    expect(responses.map((response) => response.status).sort()).toEqual([201, 422]);
+
+    const activeCount = await env.DB.prepare(
+      "SELECT COUNT(*) AS count FROM attachments WHERE issue_id = ? AND deleted_at IS NULL"
+    )
+      .bind(issueId)
+      .first<{ count: number }>();
+    expect(activeCount?.count).toBe(10);
+
+    const storedObjects = await env.ATTACHMENTS.list({ prefix: `issues/${issueId}/` });
+    expect(storedObjects.objects).toHaveLength(objectsBefore.objects.length + 1);
+  });
+
   it("handles soft-delete with role permissions (manager/admin only, 403/204)", async () => {
     const { publicId } = await createIssue();
     const issueId = Number(publicId.replace("INC-", ""));

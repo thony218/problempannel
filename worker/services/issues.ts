@@ -1,6 +1,6 @@
 import type { components } from "../../src/shared/api-types.generated";
 import { AppError } from "../domain/errors";
-import { decodeCursor, encodeCursor } from "../domain/cursor";
+import { decodeCursor, encodeCursor, type IssueCursorPayload } from "../domain/cursor";
 import { parsePublicId } from "../domain/publicId";
 import { findActiveReferenceById, findActiveReferencesByIds, type ReferenceItem } from "../db/reference";
 import { findActiveUserById } from "../db/users";
@@ -167,7 +167,7 @@ export async function listIssues(
   query: ListIssuesQuery,
   config: Pick<AppConfig, "businessTimeZone">
 ): Promise<ListIssuesResponseData> {
-  let cursorId: number | null = null;
+  let cursor: IssueCursorPayload | null = null;
   if (query.cursor) {
     const decoded = decodeCursor(query.cursor);
     if (!decoded) {
@@ -175,11 +175,17 @@ export async function listIssues(
         cursor: "Curseur de pagination invalide ou expiré.",
       });
     }
-    cursorId = decoded.id;
+    const cursorSort = decoded.sort ?? "newest";
+    if (cursorSort !== query.sort) {
+      throw new AppError("VALIDATION_ERROR", "Le curseur ne correspond pas au tri demandé.", {
+        cursor: "Recommencez la pagination après avoir changé le tri.",
+      });
+    }
+    cursor = decoded;
   }
 
   const result = await queryIssuesList(db, {
-    cursorId,
+    cursor,
     limit: query.limit,
     q: query.q,
     status: query.status,
@@ -188,6 +194,8 @@ export async function listIssues(
     departmentId: query.departmentId,
     categoryId: query.categoryId,
     ownerUserId: query.ownerUserId,
+    errorActorUserId: query.errorActorUserId,
+    sort: query.sort,
     from: query.from,
     to: query.to,
     overdue: query.overdue,
@@ -197,10 +205,17 @@ export async function listIssues(
   });
 
   const items = result.rows.map(mapIssueRow);
-  const nextCursor =
-    result.hasMore && result.rows.length > 0
-      ? encodeCursor({ id: result.rows[result.rows.length - 1].id })
-      : null;
+  const lastRow = result.rows[result.rows.length - 1];
+  let nextCursor: string | null = null;
+  if (result.hasMore && lastRow) {
+    const payload: IssueCursorPayload = { id: lastRow.id, sort: query.sort };
+    if (query.sort === "priority") {
+      payload.sortKey = lastRow.priority === "urgent" ? 3 : lastRow.priority === "important" ? 2 : 1;
+    } else if (query.sort === "dueDate") {
+      payload.sortKey = lastRow.due_date;
+    }
+    nextCursor = encodeCursor(payload);
+  }
 
   return {
     items,
@@ -294,7 +309,7 @@ export async function updateIssue(
 
   const columns: IssueColumnUpdates = {};
 
-  const [location, category, department, subcategory, owner, waitingUser, impactTypes] = await Promise.all([
+  const [location, category, department, subcategory, owner, errorActor, waitingUser, impactTypes] = await Promise.all([
     input.locationId != null ? findActiveReferenceById(db, "locations", input.locationId) : Promise.resolve(undefined),
     input.categoryId != null ? findActiveReferenceById(db, "categories", input.categoryId) : Promise.resolve(undefined),
     input.departmentId != null
@@ -304,6 +319,7 @@ export async function updateIssue(
       ? findActiveReferenceById(db, "subcategories", input.subcategoryId)
       : Promise.resolve(undefined),
     input.ownerUserId != null ? findActiveUserById(db, input.ownerUserId) : Promise.resolve(undefined),
+    input.errorActorUserId != null ? findActiveUserById(db, input.errorActorUserId) : Promise.resolve(undefined),
     input.waitingOn?.type === "user" ? findActiveUserById(db, input.waitingOn.userId) : Promise.resolve(undefined),
     input.impacts
       ? findActiveReferencesByIds(
@@ -372,6 +388,14 @@ export async function updateIssue(
   if ("ownerUserId" in input) {
     if (input.ownerUserId != null && !owner) fields.ownerUserId = "Utilisateur introuvable ou inactif.";
     else columns.owner_user_id = input.ownerUserId ?? null;
+  }
+
+  if ("errorActorUserId" in input) {
+    if (input.errorActorUserId != null && !errorActor) {
+      fields.errorActorUserId = "Employé introuvable ou inactif.";
+    } else {
+      columns.error_actor_user_id = input.errorActorUserId ?? null;
+    }
   }
 
   if ("dueDate" in input) columns.due_date = input.dueDate ?? null;
@@ -585,5 +609,4 @@ export async function updateIssue(
 
   return getIssueDetail(db, publicId);
 }
-
 

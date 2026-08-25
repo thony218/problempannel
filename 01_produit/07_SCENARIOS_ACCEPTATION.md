@@ -27,6 +27,12 @@ S14 publicId mal formé → 404.
 S15 PATCH stale ETag → 409.
 S16 PATCH sans If-Match → 428.
 
+## Attribution employé
+S53 manager attribue un employé actif → accepté et version incrémentée.
+S54 employee attribue un collègue → 403.
+S55 employé inconnu ou inactif → 422.
+S56 analytique employé+sous-catégorie → agrégation exacte et manager+ seulement.
+
 ## Fichiers
 S17 JPEG valide.
 S18 HEIC valide.

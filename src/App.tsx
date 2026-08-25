@@ -8,6 +8,7 @@ import { IssueList } from "./features/issues/IssueList";
 import { IssueDetailView } from "./features/issues/IssueDetailView";
 import { AnalyticsView } from "./features/analytics/AnalyticsView";
 import { AdminView } from "./features/admin/AdminView";
+import { HomeView } from "./features/home/HomeView";
 
 /**
  * Masquer l'onglet Administration ne suffit pas : une URL se tape à la main.
@@ -27,7 +28,8 @@ export function App() {
     <AuthProvider>
       <Routes>
         <Route element={<AppShell />}>
-          <Route path={PATHS.root} element={<Navigate to={PATHS.registry} replace />} />
+          <Route path={PATHS.root} element={<Navigate to={PATHS.home} replace />} />
+          <Route path={PATHS.home} element={<HomeView />} />
           <Route path={PATHS.newIssue} element={<CreateIssueForm />} />
           <Route path={PATHS.registry} element={<IssueList />} />
           <Route path={PATHS.issueDetail} element={<IssueDetailView />} />

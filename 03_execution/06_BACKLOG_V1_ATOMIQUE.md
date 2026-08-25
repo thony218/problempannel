@@ -119,3 +119,15 @@ Chaque tâche possède une sortie concrète et une preuve. Les tâches sont regr
 | V4-RED-01 | 4/7 | Refuser caviardage sans cible | OpenAPI + Zod | S43-S44 |
 | V4-DRAFT-01 | 6 | Machine d'état editing/pendingUpload | IndexedDB | S45-S47 |
 | V4-IMG-01 | 6 | Réduction images décodables | frontend helper | S50 |
+
+## Complétion V5 — Attribution et fermeture locale
+
+| ID | Owner | Tâche | Sortie | Preuve |
+|---|---|---|---|---|
+| V5-ATTR-01 | 2/4 | Champ employé concerné + migration | D1/OpenAPI | migration + types |
+| V5-ATTR-02 | 3/4 | Permissions et historique attribution | service PATCH | S53-S55 |
+| V5-ATTR-03 | 6 | Annuaire minimal et UI attribution | meta/détail/registre | aucun courriel |
+| V5-ATTR-04 | 8/6 | Analytique erreurs par employé | API/UI | S56 |
+| V5-CLOSE-01 | 4/6 | ETag HTTP conforme + repli client | Worker/UI | PATCH réel |
+| V5-CLOSE-02 | 4/6 | Accueil et tris Registre | routes/UI/API | S41 + tris |
+| V5-CLOSE-03 | 7 | Quota PJ atomique | trigger/service | concurrence prouvée |

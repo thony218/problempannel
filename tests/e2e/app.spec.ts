@@ -18,10 +18,14 @@ test("application shell loads", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /Registre des erreurs/ })).toBeVisible();
 });
 
-test("the root redirects to the registry", async ({ page }) => {
+test("the root redirects to the operational home", async ({ page }) => {
   await page.goto("/");
-  await expect(page).toHaveURL(/\/registre$/);
-  await expect(page.getByTestId("issue-list-container")).toBeVisible();
+  await expect(page).toHaveURL(/\/accueil$/);
+  await expect(page.getByTestId("home-view")).toBeVisible();
+  await expect(page.getByTestId("home-my-issues")).toBeVisible();
+  await expect(page.getByTestId("home-urgent")).toBeVisible();
+  await expect(page.getByTestId("home-waiting")).toBeVisible();
+  await expect(page.getByTestId("home-reviews")).toBeVisible();
 });
 
 test("the primary navigation exposes the main destinations", async ({ page }) => {
@@ -29,10 +33,51 @@ test("the primary navigation exposes the main destinations", async ({ page }) =>
 
   await expect(page.getByTestId("tab-new")).toBeVisible();
   await expect(page.getByTestId("tab-list")).toBeVisible();
+  await expect(page.getByTestId("tab-home")).toBeVisible();
   await expect(page.getByTestId("tab-analytics")).toBeVisible();
 
   // Ce sont de vrais liens : ils portent une URL et s'ouvrent dans un onglet.
   await expect(page.getByTestId("tab-list")).toHaveAttribute("href", "/registre");
+});
+
+test("a manager attributes an error to an employee and sees the saved name", async ({ page }) => {
+  const managerHeaders = { "X-Dev-User-Email": "manager@example.test" };
+  const metaResponse = await page.request.get("/api/meta", { headers: managerHeaders });
+  expect(metaResponse.ok()).toBeTruthy();
+  const metaBody = await metaResponse.json();
+  const locationId = metaBody.data.locations[0].id;
+  const categoryId = metaBody.data.categories[0].id;
+  const impactTypeId = metaBody.data.impactTypes[0].id;
+  const employee = metaBody.data.users.find((user: any) => user.role === "employee" && user.active);
+  expect(employee).toBeTruthy();
+
+  const createResponse = await page.request.post("/api/issues", {
+    headers: { ...managerHeaders, "Content-Type": "application/json" },
+    data: {
+      occurredOn: "2026-08-25",
+      locationId,
+      categoryId,
+      description: "Dossier Playwright pour vérifier l'attribution à un employé.",
+      priority: "normal",
+      impacts: [{ impactTypeId, details: null }],
+    },
+  });
+  expect(createResponse.status()).toBe(201);
+  const created = await createResponse.json();
+
+  await page.addInitScript(() => {
+    localStorage.setItem("registre.devUserEmail", "manager@example.test");
+  });
+  await page.goto(`/dossiers/${created.data.publicId}`);
+  await page.getByTestId("btn-open-edit-issue").click();
+
+  const employeeSelect = page.getByTestId("select-edit-error-actor");
+  await expect(employeeSelect).toBeVisible();
+  await employeeSelect.selectOption(String(employee.id));
+  await page.getByTestId("btn-save-issue").click();
+
+  await expect(page.getByTestId("modal-edit-issue")).toBeHidden();
+  await expect(page.getByTestId("issue-error-actor")).toContainText(employee.displayName);
 });
 
 /**

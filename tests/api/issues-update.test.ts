@@ -239,7 +239,7 @@ describe("PATCH /api/issues/:publicId", () => {
   it("rejects unauthenticated requests with 401", async () => {
     const res = await app.request(
       "http://local/api/issues/INC-000001",
-      { method: "PATCH", headers: { "Content-Type": "application/json", "If-Match": "issue-1-v1" }, body: "{}" },
+      { method: "PATCH", headers: { "Content-Type": "application/json", "If-Match": "\"issue-1-v1\"" }, body: "{}" },
       env
     );
     expect(res.status).toBe(401);
@@ -254,7 +254,7 @@ describe("PATCH /api/issues/:publicId", () => {
   });
 
   it("returns 404 for a well-formed but unknown publicId", async () => {
-    const res = await patch("/issues/INC-999999", { description: "x".repeat(20) }, { "If-Match": "issue-999999-v1" });
+    const res = await patch("/issues/INC-999999", { description: "x".repeat(20) }, { "If-Match": "\"issue-999999-v1\"" });
     expect(res.status).toBe(404);
   });
 
@@ -271,7 +271,7 @@ describe("PATCH /api/issues/:publicId", () => {
 
   it("S15: rejects a mismatched If-Match with 409", async () => {
     const { publicId, etag } = await createIssue();
-    const res = await patch(`/issues/${publicId}`, { description: "x".repeat(20) }, { "If-Match": "issue-1-v999" });
+    const res = await patch(`/issues/${publicId}`, { description: "x".repeat(20) }, { "If-Match": "\"issue-1-v999\"" });
     expect(res.status).toBe(409);
     const body = (await res.json()) as any;
     expect(body.error.code).toBe("CONFLICT");
@@ -794,5 +794,57 @@ describe("PATCH /api/issues/:publicId", () => {
       expect(body.error.fields.reopenReason).toBeDefined();
     });
   });
-});
 
+  describe("V5-ATTR-02: attribution de l'employé concerné", () => {
+    it("S53: allows a manager to assign an active employee and records the field change", async () => {
+      const { publicId, etag } = await createIssue();
+      const res = await patch(
+        `/issues/${publicId}`,
+        { errorActorUserId: otherEmployeeId },
+        { "If-Match": etag },
+        MANAGER_HEADER
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.headers.get("ETag")).toMatch(/^"issue-\d+-v2"$/);
+      const body = (await res.json()) as any;
+      expect(body.data.issue.errorActorUserId).toBe(otherEmployeeId);
+      expect(body.data.issue.rowVersion).toBe(2);
+
+      const issueId = Number(publicId.replace("INC-", ""));
+      const history = await env.DB.prepare(
+        "SELECT payload_json FROM issue_history WHERE issue_id = ? AND event_type = 'issue_updated' ORDER BY id DESC LIMIT 1"
+      ).bind(issueId).first<{ payload_json: string }>();
+      expect(JSON.parse(history!.payload_json).fields).toContain("errorActorUserId");
+    });
+
+    it("S54: refuses attribution by an employee", async () => {
+      const { publicId, etag } = await createIssue();
+      const res = await patch(
+        `/issues/${publicId}`,
+        { errorActorUserId: otherEmployeeId },
+        { "If-Match": etag },
+        EMPLOYEE_HEADER
+      );
+      expect(res.status).toBe(403);
+    });
+
+    it("S55: refuses an inactive employee", async () => {
+      const inactiveId = (
+        await env.DB.prepare(
+          "INSERT INTO users (email, display_name, role, active) VALUES ('inactive@example.test', 'Inactif', 'employee', 0) RETURNING id"
+        ).first<{ id: number }>()
+      )!.id;
+      const { publicId, etag } = await createIssue();
+      const res = await patch(
+        `/issues/${publicId}`,
+        { errorActorUserId: inactiveId },
+        { "If-Match": etag },
+        MANAGER_HEADER
+      );
+      expect(res.status).toBe(422);
+      const body = (await res.json()) as any;
+      expect(body.error.fields.errorActorUserId).toContain("inactif");
+    });
+  });
+});

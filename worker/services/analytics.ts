@@ -1,10 +1,12 @@
 import {
   fetchAnalyticsSummary,
   fetchEffectiveness,
+  fetchErrorsByEmployee,
   fetchRecurringGroups,
   type AnalyticsFilterParams,
   type ApiAnalyticsSummary,
   type ApiEffectiveness,
+  type ApiEmployeeErrorStat,
   type ApiRecurringGroup,
 } from "../db/analytics";
 import { businessToday, type AppConfig } from "../domain/config";
@@ -18,6 +20,13 @@ export async function getAnalyticsSummary(
     ...filters,
     businessToday: businessToday(config.businessTimeZone),
   });
+}
+
+export async function getErrorsByEmployee(
+  db: D1Database,
+  filters: AnalyticsFilterParams
+): Promise<ApiEmployeeErrorStat[]> {
+  return fetchErrorsByEmployee(db, filters);
 }
 
 export async function getRecurringIssues(

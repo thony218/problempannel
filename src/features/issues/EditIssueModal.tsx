@@ -28,6 +28,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
   const [status, setStatus] = useState<IssueStatus>(issue.status);
   const [priority, setPriority] = useState<Priority>(issue.priority);
   const [ownerUserId, setOwnerUserId] = useState<number | "">(issue.ownerUserId || "");
+  const [errorActorUserId, setErrorActorUserId] = useState<number | "">(issue.errorActorUserId || "");
   const [dueDate, setDueDate] = useState<string>(issue.dueDate || "");
   const [reopenReason, setReopenReason] = useState<string>("");
 
@@ -97,6 +98,9 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
     if (isManager) {
       if (priority !== issue.priority) payload.priority = priority;
       if (ownerUserId !== (issue.ownerUserId || "")) payload.ownerUserId = ownerUserId ? Number(ownerUserId) : null;
+      if (errorActorUserId !== (issue.errorActorUserId || "")) {
+        payload.errorActorUserId = errorActorUserId ? Number(errorActorUserId) : null;
+      }
       if (dueDate !== (issue.dueDate || "")) payload.dueDate = dueDate || null;
 
       if (status !== issue.status) {
@@ -132,14 +136,18 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
       return;
     }
 
+    if (!etag) {
+      setFormError("La version du dossier est indisponible. Rechargez le dossier avant d'enregistrer.");
+      setSubmitting(false);
+      return;
+    }
+
     try {
       const headers: Record<string, string> = {
         "Content-Type": "application/json",
         Accept: "application/json",
       };
-      if (etag) {
-        headers["If-Match"] = etag;
-      }
+      headers["If-Match"] = etag;
 
       const res = await apiFetch(`/api/issues/${issue.publicId}`, {
         method: "PATCH",
@@ -263,17 +271,23 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
                 <div className="form-group">
-                  <label className="form-label" htmlFor="edit-owner">ID Responsable assigné</label>
-                  <input
+                  <label className="form-label" htmlFor="edit-owner">Responsable assigné</label>
+                  <select
                     id="edit-owner"
-                    type="number"
-                    min={1}
                     className="form-control"
                     value={ownerUserId}
                     onChange={(e) => setOwnerUserId(e.target.value ? Number(e.target.value) : "")}
-                    placeholder="Ex : 2"
                     data-testid="select-edit-owner"
-                  />
+                  >
+                    <option value="">-- Non assigné --</option>
+                    {meta?.users
+                      .filter((u) => u.active || u.id === issue.ownerUserId)
+                      .map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.displayName}{u.active ? "" : " (inactif)"}
+                        </option>
+                      ))}
+                  </select>
                 </div>
 
                 <div className="form-group">
@@ -285,6 +299,29 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                     value={dueDate}
                     onChange={(e) => setDueDate(e.target.value)}
                   />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="edit-error-actor">Employé concerné par l'erreur</label>
+                <select
+                  id="edit-error-actor"
+                  className="form-control"
+                  value={errorActorUserId}
+                  onChange={(e) => setErrorActorUserId(e.target.value ? Number(e.target.value) : "")}
+                  data-testid="select-edit-error-actor"
+                >
+                  <option value="">-- Attribution inconnue --</option>
+                  {meta?.users
+                    .filter((u) => u.active || u.id === issue.errorActorUserId)
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.displayName}{u.active ? "" : " (inactif)"}
+                      </option>
+                    ))}
+                </select>
+                <div style={{ fontSize: "0.75rem", color: "var(--color-text-muted)", marginTop: "0.25rem" }}>
+                  Distinct du responsable chargé de corriger le dossier.
                 </div>
               </div>
 
@@ -307,16 +344,18 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
 
                   {waitingType === "user" ? (
                     <div className="form-group">
-                      <label className="form-label required">ID Utilisateur attendu</label>
-                      <input
-                        type="number"
-                        min={1}
+                      <label className="form-label required">Utilisateur attendu</label>
+                      <select
                         className="form-control"
                         value={waitingUserId}
-                        onChange={(e) => setWaitingUserId(Number(e.target.value))}
-                        placeholder="Ex : 3"
+                        onChange={(e) => setWaitingUserId(e.target.value ? Number(e.target.value) : "")}
                         required
-                      />
+                      >
+                        <option value="">-- Sélectionner --</option>
+                        {meta?.users.filter((u) => u.active).map((u) => (
+                          <option key={u.id} value={u.id}>{u.displayName}</option>
+                        ))}
+                      </select>
                     </div>
                   ) : (
                     <div className="form-group">
@@ -347,18 +386,27 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                     >
                       <option value="">-- Non spécifié --</option>
                       <option value="known">Connue</option>
-                      <option value="to_investigate">À vérifier</option>
+                      <option value="toVerify">À vérifier</option>
                     </select>
                   </div>
                   <div className="form-group">
                     <label className="form-label">Type de correction permanente</label>
-                    <input
-                      type="text"
+                    <select
                       className="form-control"
-                      placeholder="Ex : Formation, Procédure..."
                       value={permanentType}
                       onChange={(e) => setPermanentType(e.target.value)}
-                    />
+                    >
+                      <option value="">-- Non spécifié --</option>
+                      <option value="procedureUpdate">Mise à jour de procédure</option>
+                      <option value="newProcedure">Nouvelle procédure</option>
+                      <option value="training">Formation</option>
+                      <option value="systemConfiguration">Configuration système</option>
+                      <option value="responsibilityChange">Changement de responsabilité</option>
+                      <option value="additionalCheck">Contrôle additionnel</option>
+                      <option value="supplierProcess">Processus fournisseur</option>
+                      <option value="noChangeRequired">Aucun changement requis</option>
+                      <option value="other">Autre</option>
+                    </select>
                   </div>
                 </div>
 
