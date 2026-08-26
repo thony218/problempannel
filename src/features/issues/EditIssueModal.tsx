@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { ISSUE_STATUS_LABELS, ISSUE_STATUS_ORDER } from "../../shared/issueLabels";
 import { useAuth } from "../auth/AuthContext";
 import type { components } from "../../shared/api-types.generated";
 import { apiFetch } from "../../shared/apiClient";
@@ -35,6 +36,53 @@ export function describeApiError(body: any, status: number): string {
     return details.join(" ");
   }
   return body?.error?.message || `Erreur lors de la mise à jour (${status}).`;
+}
+
+/**
+ * Messages par champ renvoyés par le Worker dans `error.fields`.
+ *
+ * Séparés de `describeApiError` parce que les deux répondent à deux moitiés
+ * distinctes de `01_produit/ux/05_ETATS_ET_MESSAGES.md` : « messages champs
+ * fournis par API » (le contenu) et le placement **sous le champ concerné**
+ * (l'emplacement). Le correctif QA-04 n'avait traité que la première.
+ */
+export function extractFieldErrors(body: any): Record<string, string> {
+  const fields = body?.error?.fields as Record<string, string> | undefined;
+  if (!fields) return {};
+  return Object.fromEntries(Object.entries(fields).filter(([, message]) => Boolean(message)));
+}
+
+/**
+ * Champs pour lesquels cette modale rend un message sous le contrôle.
+ *
+ * La liste est explicite plutôt que déduite : un champ signalé par le serveur
+ * mais absent de cette liste — parce que son contrôle n'est pas rendu pour ce
+ * rôle, ou pas encore écrit — doit rester visible quelque part. `bannerErrors`
+ * s'en charge. Sans cette liste, un message serait silencieusement perdu, ce
+ * qui est exactement le défaut que la recette a révélé.
+ */
+export const ANCHORED_FIELD_ERRORS = new Set([
+  "status",
+  "reopenReason",
+  "ownerUserId",
+  "errorActorUserId",
+  "categoryId",
+  "subcategoryId",
+  "waitingOn",
+  "causeStatus",
+  "causeSummary",
+  "permanentCorrectionType",
+  "permanentCorrectionSummary",
+  "finalResult",
+  "preventionLearning",
+  "effectivenessStatus",
+]);
+
+/** Messages qui n'ont aucun contrôle sous lequel s'afficher. */
+export function bannerErrors(fieldErrors: Record<string, string>): string[] {
+  return Object.entries(fieldErrors)
+    .filter(([name]) => !ANCHORED_FIELD_ERRORS.has(name))
+    .map(([, message]) => message);
 }
 
 export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: EditIssueModalProps) {
@@ -91,11 +139,13 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [conflictError, setConflictError] = useState<boolean>(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSubmitting(true);
     setFormError(null);
+    setFieldErrors({});
     setConflictError(false);
 
     const payload: any = {};
@@ -187,6 +237,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
 
       if (!res.ok) {
         const errData = (await res.json()) as any;
+        setFieldErrors(extractFieldErrors(errData));
         throw new Error(describeApiError(errData, res.status));
       }
 
@@ -198,6 +249,17 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
       setSubmitting(false);
     }
   };
+
+
+  const orphanMessages = bannerErrors(fieldErrors);
+  const hasAnchoredError = Object.keys(fieldErrors).some((name) => ANCHORED_FIELD_ERRORS.has(name));
+
+  const fieldError = (name: string) =>
+    fieldErrors[name] ? (
+      <div className="field-error" role="alert" data-testid={`edit-field-error-${name}`}>
+        {fieldErrors[name]}
+      </div>
+    ) : null;
 
   return (
     <div className="modal-overlay" data-testid="modal-edit-issue">
@@ -235,9 +297,18 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
           </div>
         )}
 
-        {formError && !conflictError && (
+        {!conflictError && (orphanMessages.length > 0 || (formError && !hasAnchoredError)) && (
           <div className="alert alert-danger" data-testid="edit-form-error">
-            {formError}
+            {orphanMessages.length > 0 ? orphanMessages.join(" ") : formError}
+          </div>
+        )}
+
+        {/* Un refus dont tous les messages sont ancrés sous un champ ne doit pas
+            laisser la modale muette en haut : la ligne ci-dessous dit où regarder,
+            sans répéter les messages eux-mêmes. */}
+        {!conflictError && orphanMessages.length === 0 && hasAnchoredError && (
+          <div className="alert alert-danger" data-testid="edit-form-error-summary">
+            Des champs doivent être corrigés ci-dessous.
           </div>
         )}
 
@@ -255,11 +326,11 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                     onChange={(e) => setStatus(e.target.value as IssueStatus)}
                     data-testid="select-edit-status"
                   >
-                    <option value="new">Nouveau</option>
-                    <option value="inProgress">En cours</option>
-                    <option value="waiting">En attente</option>
-                    <option value="resolved">Résolu</option>
+                    {ISSUE_STATUS_ORDER.map((s) => (
+                      <option key={s} value={s}>{ISSUE_STATUS_LABELS[s]}</option>
+                    ))}
                   </select>
+                  {fieldError("status")}
                 </div>
 
                 <div className="form-group">
@@ -294,6 +365,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                     required
                     data-testid="input-reopen-reason"
                   />
+                  {fieldError("reopenReason")}
                 </div>
               )}
 
@@ -316,6 +388,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                         </option>
                       ))}
                   </select>
+                  {fieldError("ownerUserId")}
                 </div>
 
                 <div className="form-group">
@@ -349,6 +422,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                       </option>
                     ))}
                 </select>
+                {fieldError("errorActorUserId")}
                 <div style={{ fontSize: "0.75rem", color: "var(--color-text-muted)", marginTop: "0.25rem" }}>
                   Distinct du responsable chargé de corriger le dossier.
                 </div>
@@ -388,6 +462,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                         <option key={c.id} value={c.id}>{c.label}</option>
                       ))}
                   </select>
+                  {fieldError("categoryId")}
                 </div>
 
                 <div className="form-group">
@@ -408,6 +483,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                         <option key={sub.id} value={sub.id}>{sub.label}</option>
                       ))}
                   </select>
+                  {fieldError("subcategoryId")}
                   <div style={{ fontSize: "0.75rem", color: "var(--color-text-muted)", marginTop: "0.25rem" }}>
                     Requise pour faire sortir le dossier du statut « Nouveau ».
                   </div>
@@ -430,6 +506,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                       <option value="customer">Client</option>
                       <option value="user">Utilisateur interne</option>
                     </select>
+                    {fieldError("waitingOn")}
                   </div>
 
                   {waitingType === "user" ? (
@@ -470,25 +547,28 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                 <h4 style={{ margin: "0 0 0.75rem 0" }}>🔍 Analyse de cause & Solutions</h4>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
                   <div className="form-group">
-                    <label className="form-label">Statut de la cause</label>
+                    <label className="form-label" htmlFor="select-edit-cause-status">Statut de la cause</label>
                     <select
                       className="form-control"
                       value={causeStatus}
                       onChange={(e) => setCauseStatus(e.target.value as any)}
-                      data-testid="select-edit-cause-status"
+                      id="select-edit-cause-status"
+                    data-testid="select-edit-cause-status"
                     >
                       <option value="">-- Non spécifié --</option>
                       <option value="known">Connue</option>
                       <option value="toVerify">À vérifier</option>
                     </select>
+                    {fieldError("causeStatus")}
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Type de correction permanente</label>
+                    <label className="form-label" htmlFor="select-edit-permanent-type">Type de correction permanente</label>
                     <select
                       className="form-control"
                       value={permanentType}
                       onChange={(e) => setPermanentType(e.target.value)}
-                      data-testid="select-edit-permanent-type"
+                      id="select-edit-permanent-type"
+                    data-testid="select-edit-permanent-type"
                     >
                       <option value="">-- Non spécifié --</option>
                       <option value="procedureUpdate">Mise à jour de procédure</option>
@@ -501,62 +581,72 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                       <option value="noChangeRequired">Aucun changement requis</option>
                       <option value="other">Autre</option>
                     </select>
+                    {fieldError("permanentCorrectionType")}
                   </div>
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Résumé de la cause</label>
+                  <label className="form-label" htmlFor="textarea-edit-cause-summary">Résumé de la cause</label>
                   <textarea
                     className="form-control"
                     rows={2}
                     value={causeSummary}
                     onChange={(e) => setCauseSummary(e.target.value)}
+                    id="textarea-edit-cause-summary"
                     data-testid="textarea-edit-cause-summary"
                   />
+                  {fieldError("causeSummary")}
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Solution immédiate</label>
+                  <label className="form-label" htmlFor="textarea-edit-immediate-solution">Solution immédiate</label>
                   <textarea
                     className="form-control"
                     rows={2}
                     value={immediateSolution}
                     onChange={(e) => setImmediateSolution(e.target.value)}
+                    id="textarea-edit-immediate-solution"
                     data-testid="textarea-edit-immediate-solution"
                   />
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Résumé de la correction permanente</label>
+                  <label className="form-label" htmlFor="textarea-edit-permanent-summary">Résumé de la correction permanente</label>
                   <textarea
                     className="form-control"
                     rows={2}
                     value={permanentSummary}
                     onChange={(e) => setPermanentSummary(e.target.value)}
+                    id="textarea-edit-permanent-summary"
                     data-testid="textarea-edit-permanent-summary"
                   />
+                  {fieldError("permanentCorrectionSummary")}
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Résultat final</label>
+                  <label className="form-label" htmlFor="textarea-edit-final-result">Résultat final</label>
                   <textarea
                     className="form-control"
                     rows={2}
                     value={finalResult}
                     onChange={(e) => setFinalResult(e.target.value)}
+                    id="textarea-edit-final-result"
                     data-testid="textarea-edit-final-result"
                   />
+                  {fieldError("finalResult")}
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Apprentissages & Prévention</label>
+                  <label className="form-label" htmlFor="textarea-edit-prevention-learning">Apprentissages & Prévention</label>
                   <textarea
                     className="form-control"
                     rows={2}
                     value={preventionLearning}
                     onChange={(e) => setPreventionLearning(e.target.value)}
+                    id="textarea-edit-prevention-learning"
                     data-testid="textarea-edit-prevention-learning"
                   />
+                  {fieldError("preventionLearning")}
                 </div>
               </div>
 
@@ -566,27 +656,30 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                   <h4 style={{ margin: "0 0 0.75rem 0", color: "#166534" }}>✅ Évaluation d'efficacité</h4>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
                     <div className="form-group">
-                      <label className="form-label">Statut d'efficacité</label>
+                      <label className="form-label" htmlFor="select-edit-effectiveness-status">Statut d'efficacité</label>
                       <select
                         className="form-control"
                         value={effectivenessStatus}
                         onChange={(e) => setEffectivenessStatus(e.target.value as any)}
-                        data-testid="select-edit-effectiveness-status"
+                        id="select-edit-effectiveness-status"
+                    data-testid="select-edit-effectiveness-status"
                       >
                         <option value="">-- Non évalué --</option>
                         <option value="pending">En attente (Pending)</option>
                         <option value="effective">Efficace</option>
                         <option value="ineffective">Inefficace</option>
                       </select>
+                      {fieldError("effectivenessStatus")}
                     </div>
                     <div className="form-group">
-                      <label className="form-label">Date de révision prévue</label>
+                      <label className="form-label" htmlFor="input-edit-effectiveness-review-date">Date de révision prévue</label>
                       <input
                         type="date"
                         className="form-control"
                         value={effectivenessReviewDate}
                         onChange={(e) => setEffectivenessReviewDate(e.target.value)}
-                        data-testid="input-edit-effectiveness-review-date"
+                        id="input-edit-effectiveness-review-date"
+                    data-testid="input-edit-effectiveness-review-date"
                       />
                     </div>
                   </div>

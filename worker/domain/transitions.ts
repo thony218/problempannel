@@ -1,5 +1,6 @@
 import type { components } from "../../src/shared/api-types.generated";
 import { AppError } from "./errors";
+import { statusLabel } from "./labels";
 
 export type ApiIssueStatus = components["schemas"]["IssueStatus"];
 export type Role = components["schemas"]["Role"];
@@ -39,14 +40,14 @@ export function validateStatusTransition(params: ValidateStatusTransitionParams)
   if (toStatus === "new") {
     throw new AppError(
       "INVALID_STATUS_TRANSITION",
-      `Impossible de revenir au statut 'new' depuis le statut '${fromStatus}'.`
+      `Impossible de revenir au statut ${statusLabel("new")} depuis le statut ${statusLabel(fromStatus)}.`
     );
   }
 
   if (fromStatus === "resolved" && toStatus === "waiting") {
     throw new AppError(
       "INVALID_STATUS_TRANSITION",
-      "Impossible de passer directement du statut 'resolved' au statut 'waiting'."
+      `Impossible de passer directement du statut ${statusLabel("resolved")} au statut ${statusLabel("waiting")}.`
     );
   }
 
@@ -59,7 +60,7 @@ export function validateStatusTransition(params: ValidateStatusTransitionParams)
     if (actorRole !== "manager" && actorRole !== "admin") {
       throw new AppError(
         "FORBIDDEN",
-        `Seul un gestionnaire ou un administrateur peut effectuer la transition de '${fromStatus}' vers '${toStatus}'.`
+        `Seul un gestionnaire ou un administrateur peut effectuer la transition de ${statusLabel(fromStatus)} vers ${statusLabel(toStatus)}.`
       );
     }
     return;
@@ -85,6 +86,6 @@ export function validateStatusTransition(params: ValidateStatusTransitionParams)
   // Filet de sécurité au cas où un état non géré apparaît
   throw new AppError(
     "INVALID_STATUS_TRANSITION",
-    `Transition non autorisée de '${fromStatus}' vers '${toStatus}'.`
+    `Transition non autorisée de ${statusLabel(fromStatus)} vers ${statusLabel(toStatus)}.`
   );
 }

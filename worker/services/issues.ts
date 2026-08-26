@@ -1,5 +1,6 @@
 import type { components } from "../../src/shared/api-types.generated";
 import { AppError } from "../domain/errors";
+import { statusLabel } from "../domain/labels";
 import { decodeCursor, encodeCursor, type IssueCursorPayload } from "../domain/cursor";
 import { parsePublicId } from "../domain/publicId";
 import { findActiveReferenceById, findActiveReferencesByIds, type ReferenceItem } from "../db/reference";
@@ -381,7 +382,7 @@ export async function updateIssue(
   }
 
   if (nextStatusDb !== "new" && nextSubcategoryId == null && !fields.subcategoryId) {
-    fields.subcategoryId = "Sous-catégorie requise pour sortir du statut 'new'.";
+    fields.subcategoryId = `Sous-catégorie requise pour sortir du statut ${statusLabel("new")}.`;
   }
 
 
@@ -496,10 +497,10 @@ export async function updateIssue(
     if (nextStatusDb === "waiting") {
       const hasWaiting = waitingTouched ? input.waitingOn != null : current.waiting_on_type != null;
       if (!hasWaiting) {
-        fields.waitingOn = "Une attente (waitingOn) est requise en statut 'waiting'.";
+        fields.waitingOn = `Une attente est requise lorsque le dossier passe au statut ${statusLabel("waiting")}.`;
       }
     } else if (waitingTouched && input.waitingOn != null) {
-      fields.waitingOn = "waitingOn n'est valide qu'en statut 'waiting'.";
+      fields.waitingOn = `Une attente ne peut être renseignée que sur un dossier au statut ${statusLabel("waiting")}.`;
     } else if (!waitingTouched && current.waiting_on_type != null) {
       // Le statut quitte 'waiting' sans que waitingOn ait été fourni : purge auto des 3 colonnes.
       columns.waiting_on_type = null;

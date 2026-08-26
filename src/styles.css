@@ -8,6 +8,13 @@
   --color-text: #0f172a;
   --color-text-muted: #64748b;
   --color-danger: #dc2626;
+  /* Rouge du texte sur fond clair. `--color-danger` reste réservé aux aplats
+     et aux bordures, où il porte du blanc. En texte il ne tient pas le seuil
+     WCAG AA : 4,42:1 sur le gris des boutons secondaires (#f1f5f9) et 4,43:1
+     sur le fond des bandeaux d'alerte (#fef2f2), pour 4,5:1 exigés. Mesuré
+     par l'audit axe-core du 2026-08-26, qui a signalé le bouton Caviarder.
+     Ce ton-ci donne 6,5:1 sur les deux fonds. */
+  --color-danger-text: #b91c1c;
   --color-danger-bg: #fef2f2;
   --color-warning: #d97706;
   --color-warning-bg: #fffbeb;
@@ -202,7 +209,7 @@ html, body {
 
 .alert-danger {
   background-color: var(--color-danger-bg);
-  color: var(--color-danger);
+  color: var(--color-danger-text);
   border: 1px solid #fecaca;
 }
 
@@ -282,7 +289,7 @@ html, body {
 
 .form-label.required::after {
   content: " *";
-  color: var(--color-danger);
+  color: var(--color-danger-text);
 }
 
 .form-control {
@@ -315,7 +322,7 @@ textarea.form-control {
 .field-error {
   margin-top: 0.25rem;
   font-size: 0.8rem;
-  color: var(--color-danger);
+  color: var(--color-danger-text);
 }
 
 .form-hint {

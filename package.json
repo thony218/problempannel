@@ -27,8 +27,9 @@
     "db:reset:local": "npm run db:migrate:local && npm run db:seed:local",
     "verify": "npm run contract:lint && npm run contract:generate && npm run types:worker && npm run typecheck && npm run test && npm run build",
     "test:e2e": "playwright test",
-    "test:e2e:install": "playwright install --with-deps chromium webkit",
+    "test:e2e:install": "playwright install --with-deps chromium firefox webkit",
     "test:perf": "vitest run --config vitest.perf.config.ts",
+    "drill:backup-restore": "bash scripts/backup-restore-drill.sh",
     "typecheck:e2e": "tsc -p tsconfig.e2e.json --noEmit"
   },
   "dependencies": {
@@ -40,6 +41,7 @@
     "zod": "^4"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@cloudflare/vite-plugin": "^1.48.0",
     "@cloudflare/vitest-plugin": "^1.0.0",
     "@cloudflare/workers-types": "^5",

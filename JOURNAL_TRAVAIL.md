@@ -1205,3 +1205,90 @@ Le tableau en tête de ce journal annonçait encore « Bootstrap 0 : bloqué, au
 - **`npm run verify`** : sans objet, aucune source applicative touchée.
 - **RFC ouverte** : non.
 - **Prochain propriétaire** : propriétaire du projet, pour les deux points de confidentialité restants.
+
+---
+
+### 2026-08-26 — Tâches de finition : libellés, messages sous champ, navigateurs, accessibilité, OPS-04, OPS-06
+
+- **Task IDs** : `OPS-04` (backup/restore prouvé), `OPS-06` (recette GO/NO-GO), plus la dette d'interface et de couverture relevée aux entrées précédentes du jour.
+- **Date** : 2026-08-26.
+- **Owner** : Claude (agent), sur demande explicite de l'utilisateur (« Fais moi toutes les tâches restantes et back test avant de push complètement »).
+- **Sauvegarde** : `/Users/anthobruneau/Downloads/Back up Codex/registre_erreurs_v4_final_2026-08-26_taches-restantes-finition.tar.gz`, 2,5 Mo, créée avant la première écriture.
+
+#### 1. Identifiants techniques dans les messages destinés aux personnes
+
+La recette du jour avait montré « Sous-catégorie requise pour sortir du statut 'new'. » affiché tel quel à un gestionnaire. Sept messages étaient concernés, pas un seul : quatre dans `worker/domain/transitions.ts`, deux dans `worker/domain/permissions.ts` (dont un exposant la clé d'API du champ, `permanentCorrectionSummary`), trois dans `worker/services/issues.ts` (dont deux nommant `waitingOn`).
+
+Le tableau des libellés vit dans `src/shared/issueLabels.ts`, importé **par les écrans et par le Worker**. Une première version le dupliquait côté Worker avec un test de cohérence par lecture de fichier; ce test s'est révélé fragile (l'espace dans le chemin du projet casse `fileURLToPath` sous workerd) et surtout inférieur au bon remède : une source unique rend la divergence impossible au lieu de la signaler après coup.
+
+#### 2. Messages de validation sous le champ concerné
+
+`01_produit/ux/05_ETATS_ET_MESSAGES.md` demandait le message **sous le champ**; le correctif QA-04 n'avait traité que son contenu. Quatorze champs de `EditIssueModal.tsx` portent désormais leur propre message.
+
+Le point délicat est le repli : un champ signalé par le serveur mais sans contrôle rendu (`locationId`, `impacts` pour un gestionnaire) verrait son message disparaître. `ANCHORED_FIELD_ERRORS` liste explicitement les champs ancrés, `bannerErrors` remonte tout le reste dans le bandeau, et un test parcourt la liste pour vérifier que chaque nom déclaré possède bien son `fieldError(...)` dans le source.
+
+Ce changement a **cassé un test E2E existant** qui attendait le message « bloquante » dans le bandeau. C'était le bon signe : le test était sensible à l'emplacement. Il vérifie maintenant que le message est sous le champ Statut, que le bandeau ne le répète pas, et qu'il affiche seulement où regarder.
+
+#### 3. Couverture navigateurs
+
+`01_produit/06_EXIGENCES_NON_FONCTIONNELLES.md` exige Chrome, Edge, Safari et Firefox. Playwright ne couvrait que Chromium et deux profils mobiles : **Firefox et Safari bureau n'avaient jamais été exercés**. Projets `firefox` et `webkit` ajoutés; `npm run test:e2e:install` installe désormais les trois moteurs.
+
+Edge n'est pas installé sur cette machine. Le projet `edge` existe mais reste **opt-in** (`PLAYWRIGHT_EDGE=1`) : un projet rouge en permanence faute de binaire cesse d'être lu. Edge partage le moteur de Chrome, donc son rendu est couvert; ce qui ne l'est pas est le binaire lui-même.
+
+**Aucun défaut spécifique à un navigateur n'a été trouvé.** Les 170 tests passent sur les cinq profils.
+
+#### 4. Accessibilité WCAG 2.1 AA (jamais mesurée jusqu'ici)
+
+Audit axe-core sur les six écrans du parcours principal et sur la modale d'édition (`tests/e2e/accessibility.spec.ts`). Une première version auditait les pages **sans identité et sans base amorcée** : les six écrans passaient, mais ils étaient vides. Un audit d'accessibilité sur une page sans contenu ne mesure rien; chaque écran est désormais peuplé, sous identité administrateur, avec une assertion de contenu avant l'analyse.
+
+Sept violations réelles trouvées et corrigées, dont cinq critiques :
+
+- **neuf paires étiquette/contrôle non associées** dans la modale d'édition (`<label>` sans `htmlFor`, contrôle sans `id`) — les textareas de cause, de solution et de résultat, et les sélecteurs de statut de cause, de type de correction et d'efficacité;
+- **quatre filtres de l'écran Analyse** dans le même cas;
+- **sélecteur de rôle de l'écran Administration** sans nom accessible : un lecteur d'écran annonçait trois sélecteurs identiques sans dire lequel appartenait à qui. Corrigé par `aria-label` nommant la personne, de même que le bouton Activer/Désactiver de la même ligne;
+- **contraste du bouton Caviarder** : `#dc2626` sur `#f1f5f9` donne 4,42:1, sous le seuil AA de 4,5:1. Le même rouge servait au texte des bandeaux d'alerte, où il donne 4,43:1 — défaut latent qu'axe n'avait pas signalé faute d'alerte affichée au moment de l'audit. Nouveau jeton `--color-danger-text: #b91c1c` (6,5:1 sur les deux fonds), réservé au texte; `--color-danger` reste pour les aplats, où il porte du blanc.
+
+Après correction : **7 audits sur 7 sans violation**.
+
+#### 5. `OPS-04` — restauration prouvée
+
+`scripts/backup-restore-drill.sh` (`npm run drill:backup-restore`) exécute le cycle complet en local : empreinte des 13 tables, export, **effacement total** du stockage D1, réimport, comparaison stricte.
+
+Deux défauts de ma première version méritent d'être consignés, parce qu'ils sont le mode de défaillance le plus dangereux pour un tel exercice :
+
+1. la destruction table par table échouait sur les clés étrangères, et l'erreur était masquée par `2>/dev/null` — le script s'arrêtait en silence;
+2. les comptages passaient par `npx`, dont les `npm notice` corrompent le JSON. Les comptages échouaient sans bruit et **le script annonçait la réussite** en comparant deux empreintes également tronquées.
+
+Corrigés par : effacement total du stockage plutôt que suppression table par table, appel direct au binaire `wrangler`, échec franc si une réponse n'est pas un entier, et refus de toute empreinte ne couvrant pas les 13 tables.
+
+**Sensibilité vérifiée** : rejoué avec un dump amputé de ses `INSERT INTO "issue_history"`, l'exercice échoue en sortie 1 et nomme la table fautive (`issue_history=11` → `0`). Un exercice incapable d'échouer ne prouve rien.
+
+Dernière exécution probante : **167 lignes sur 13 tables**, retrouvées à l'identique après effacement complet.
+
+La procédure distante (export `--remote`, Time Travel) est documentée dans `05_qualite_exploitation/08_SAUVEGARDE_RESTAURATION.md` mais **non exercée** : la prouver suppose une base de destination jetable, donc un staging.
+
+#### 6. `OPS-06` — rapport GO/NO-GO
+
+`05_qualite_exploitation/09_RECETTE_GO_NO_GO.md`. Verdict proposé : **GO pour le pilote** derrière Access, **NO-GO pour l'ouverture aux employés** tant que les deux points de confidentialité restants ne sont pas tranchés. Le rapport ne décide rien; la signature est réservée au propriétaire.
+
+#### 7. `wrangler.jsonc`
+
+Les `REPLACE_ME` du bloc de développement désignaient des valeurs **jamais lues** : avec `APP_ENV=local`, `worker/auth/identity.ts` résout l'identité par l'en-tête `X-Dev-User-Email` sans vérifier aucun jeton Access, et `database_id` n'est pas utilisé en local. C'était une fausse tâche restante. Valeurs remplacées par `unused-in-local` et un commentaire expliquant pourquoi. Le bloc production est inchangé et son `--dry-run` confirme les vraies valeurs.
+
+- **Commandes exécutées** :
+  - `npm run verify` → **PASS**, exit 0, **274 tests dans 36 fichiers** (261 dans 35 avant).
+  - `npx playwright test` → **170 passés** sur 5 profils de navigateur (81 sur 3 avant).
+  - `npm run test:perf` → **21 passés**, 100 000 dossiers.
+  - `npm run drill:backup-restore` → **PASS**, 167 lignes restaurées.
+  - `npm run build:production && npx wrangler deploy --env production --dry-run` → **PASS**, bindings production confirmés.
+- **`npm run verify`** : **PASS** (exit 0).
+- **Staging / production testés** : **non**. Aucune modification Cloudflare, aucun déploiement. La production reste sur `13185687-bd20-4ae2-b85c-25f6690e7a77` et **ne porte donc aucun des correctifs de cette entrée**.
+- **Limitations connues / dette** :
+  - Rien de cette entrée n'est déployé. Les correctifs d'accessibilité et de placement des messages sont dans le dépôt, pas en production.
+  - **Aucun environnement staging n'a été créé** : cela suppose de provisionner un D1, un bucket R2 et une application Access côté Cloudflare, ce qui sort de ce que l'agent peut faire — la commande de déploiement lui est déjà refusée. La p95 staging et la restauration distante prouvée restent donc hors d'atteinte.
+  - **La branche `design/appliquer-themes-au-produit` entre désormais en conflit** avec `main` : 8 fichiers en commun, dont `src/styles.css` que la branche réécrit sur 1092 lignes et `EditIssueModal.tsx` que cette entrée modifie substantiellement. Plus elle attend, plus la fusion coûtera cher.
+  - Défaut mineur relevé au passage, non corrigé : `npm run db:reset:local` n'est pas idempotent. Il migre puis ré-amorce sans purger, et échoue au second passage sur `UNIQUE constraint failed: locations.code`. Il faut effacer `.wrangler/state/v3/d1` avant de le rejouer.
+  - `tests/e2e/accessibility.spec.ts` exige, comme `lifecycle.spec.ts`, une base locale amorcée. Sans impact CI : la CI n'exécute que `npm ci && npm run verify`, qui n'inclut pas les E2E.
+  - Les deux points de confidentialité (`OPS-05`) et le choix sur le staging restent ouverts et n'appartiennent pas à l'agent.
+- **RFC ouverte** : non. Quatre exigences gelées sont assumées avec écart et devraient faire l'objet d'un RFC si l'abandon est définitif : p95 staging, Edge réel, restauration distante exercée, accessibilité au-delà de l'automatisable. Voir §3 du rapport GO/NO-GO.
+- **Prochain propriétaire** : propriétaire du projet, pour déployer ce lot, trancher les deux points de confidentialité, décider du staging et du sort de la branche thème.

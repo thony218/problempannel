@@ -2,6 +2,7 @@ import type { components } from "../../src/shared/api-types.generated";
 import type { IssueRow } from "../db/issues";
 import type { UpdateIssueInput } from "../validation/issues";
 import { AppError } from "./errors";
+import { fieldLabel, statusLabel } from "./labels";
 
 export type Role = components["schemas"]["Role"];
 
@@ -55,7 +56,7 @@ export function validateIssueUpdatePermissions(params: ValidateIssueUpdatePermis
     if (field in input && input[field] !== undefined) {
       throw new AppError(
         "FORBIDDEN",
-        `La modification du champ '${field}' est réservée aux gestionnaires et administrateurs.`
+        `La modification du champ ${fieldLabel(field)} est réservée aux gestionnaires et administrateurs.`
       );
     }
   }
@@ -70,13 +71,13 @@ export function validateIssueUpdatePermissions(params: ValidateIssueUpdatePermis
     if (current.status !== "new") {
       throw new AppError(
         "FORBIDDEN",
-        "Un employé ne peut modifier les détails d'un dossier que lorsqu'il est au statut 'new'."
+        `Un employé ne peut modifier les détails d'un dossier que lorsqu'il est au statut ${statusLabel("new")}.`
       );
     }
     if (current.created_by_user_id !== actorUserId) {
       throw new AppError(
         "FORBIDDEN",
-        "Seul le créateur du dossier est autorisé à en corriger les détails au statut 'new'."
+        `Seul le créateur du dossier est autorisé à en corriger les détails au statut ${statusLabel("new")}.`
       );
     }
   }

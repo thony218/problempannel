@@ -1,11 +1,22 @@
 {
+  // Environnement par défaut = développement local (Miniflare).
+  //
+  // `ACCESS_TEAM_DOMAIN` et `ACCESS_AUD` portaient `REPLACE_ME`, ce qui se
+  // lisait comme une configuration à compléter. Ils ne sont jamais lus ici :
+  // avec `APP_ENV=local`, `worker/auth/identity.ts` résout l'identité depuis
+  // l'en-tête `X-Dev-User-Email` et ne vérifie aucun jeton Access. De même,
+  // `database_id` n'est pas utilisé en local, où D1 est adressé par son nom;
+  // wrangler exige seulement que le champ existe.
+  //
+  // Les valeurs disent maintenant ce qu'elles sont. Les vrais gabarits à
+  // remplir vivent dans `wrangler.template.jsonc`.
   "$schema":"node_modules/wrangler/config-schema.json",
   "name":"registre-erreurs-dev",
   "main":"worker/index.ts",
   "compatibility_date":"2026-08-24",
   "assets":{"not_found_handling":"single-page-application"},
-  "vars":{"APP_ENV":"local","BUSINESS_TIME_ZONE":"America/Toronto","MAX_ATTACHMENT_BYTES":"10485760","MAX_ATTACHMENTS_PER_ISSUE":"10","RECURRING_WINDOW_DAYS":"90","RECURRING_MIN_COUNT":"3","ACCESS_TEAM_DOMAIN":"REPLACE_ME","ACCESS_AUD":"REPLACE_ME"},
-  "d1_databases":[{"binding":"DB","database_name":"registre-erreurs-dev","database_id":"REPLACE_DEV_D1_ID","migrations_dir":"migrations"}],
+  "vars":{"APP_ENV":"local","BUSINESS_TIME_ZONE":"America/Toronto","MAX_ATTACHMENT_BYTES":"10485760","MAX_ATTACHMENTS_PER_ISSUE":"10","RECURRING_WINDOW_DAYS":"90","RECURRING_MIN_COUNT":"3","ACCESS_TEAM_DOMAIN":"unused-in-local","ACCESS_AUD":"unused-in-local"},
+  "d1_databases":[{"binding":"DB","database_name":"registre-erreurs-dev","database_id":"local-only-not-a-remote-database","migrations_dir":"migrations"}],
   "r2_buckets":[{"binding":"ATTACHMENTS","bucket_name":"registre-erreurs-attachments-dev"}],
   "ratelimits":[{"name":"WRITE_RATE_LIMIT","namespace_id":"1001","simple":{"limit":120,"period":60}},{"name":"UPLOAD_RATE_LIMIT","namespace_id":"1002","simple":{"limit":20,"period":60}}],
   "env":{"production":{"name":"registre-erreurs","workers_dev":false,"routes":[{"pattern":"problems.chamaran.com","custom_domain":true}],"vars":{"APP_ENV":"production","BUSINESS_TIME_ZONE":"America/Toronto","MAX_ATTACHMENT_BYTES":"10485760","MAX_ATTACHMENTS_PER_ISSUE":"10","RECURRING_WINDOW_DAYS":"90","RECURRING_MIN_COUNT":"3","ACCESS_TEAM_DOMAIN":"chamaran.cloudflareaccess.com","ACCESS_AUD":"7cbaca686ce1a06781fdb91c5345e723fe21237a78cd6502cf9fe6f23afe5b95"},"d1_databases":[{"binding":"DB","database_name":"registre-erreurs-prod","database_id":"b2d02093-2e5d-4024-a5dc-728adee84386","migrations_dir":"migrations"}],"r2_buckets":[{"binding":"ATTACHMENTS","bucket_name":"registre-erreurs-attachments-prod"}],"ratelimits":[{"name":"WRITE_RATE_LIMIT","namespace_id":"1001","simple":{"limit":120,"period":60}},{"name":"UPLOAD_RATE_LIMIT","namespace_id":"1002","simple":{"limit":20,"period":60}}],"observability":{"enabled":true,"head_sampling_rate":1}}}

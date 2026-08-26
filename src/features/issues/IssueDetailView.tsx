@@ -201,7 +201,7 @@ export function IssueDetailView() {
             <button
               type="button"
               className="btn btn-secondary"
-              style={{ color: "var(--color-danger)" }}
+              style={{ color: "var(--color-danger-text)" }}
               onClick={() => setShowRedactModal(true)}
               data-testid="btn-open-redact"
             >

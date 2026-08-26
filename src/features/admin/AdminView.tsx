@@ -351,8 +351,14 @@ export function AdminView() {
                   </div>
 
                   <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                    {/* La ligne est compacte et n'offre pas de place pour une
+                        étiquette visible. `aria-label` nomme la personne plutôt
+                        que le champ : sans elle, un lecteur d'écran annonce
+                        trois sélecteurs « Rôle » identiques et l'utilisateur ne
+                        sait pas lequel il modifie. */}
                     <select
                       className="form-control"
+                      aria-label={`Rôle de ${u.displayName}`}
                       style={{ fontSize: "0.8rem", padding: "0.25rem 0.5rem", minHeight: "auto" }}
                       value={u.role}
                       onChange={(e) => handleUpdateUserRole(u.id, e.target.value as Role)}
@@ -366,6 +372,7 @@ export function AdminView() {
                       type="button"
                       className="btn btn-secondary"
                       style={{ fontSize: "0.8rem", padding: "0.25rem 0.5rem", minHeight: "auto" }}
+                      aria-label={`${u.active ? "Désactiver" : "Activer"} ${u.displayName}`}
                       onClick={() => handleToggleUserActive(u.id, u.active)}
                     >
                       {u.active ? "Désactiver" : "Activer"}

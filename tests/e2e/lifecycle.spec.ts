@@ -165,7 +165,15 @@ test.describe("QA-04 — cycle de vie complet d'un dossier", () => {
     // Le message doit nommer la cause : une résolution refusée pour une autre
     // raison (champ manquant, conflit de version) rendrait ce test vert sans
     // rien prouver de la règle « aucune action bloquante ouverte ».
-    await expect(page.getByTestId("edit-form-error")).toContainText("bloquante");
+    //
+    // Et il doit apparaître **sous le champ Statut**, pas seulement quelque
+    // part dans la modale : `ux/05_ETATS_ET_MESSAGES.md` demande le message au
+    // niveau du champ concerné. C'est le statut que le gestionnaire doit
+    // renoncer à changer, c'est donc là qu'il doit lire pourquoi.
+    await expect(page.getByTestId("edit-field-error-status")).toContainText("bloquante");
+    // Le bandeau ne répète pas un message déjà ancré; il dit seulement où regarder.
+    await expect(page.getByTestId("edit-form-error-summary")).toBeVisible();
+    await expect(page.getByTestId("edit-form-error")).toHaveCount(0);
     await expect(page.getByTestId("modal-edit-issue")).toBeVisible();
     await page.getByRole("button", { name: "Annuler" }).first().click();
     await expectStatus(page, "inProgress");

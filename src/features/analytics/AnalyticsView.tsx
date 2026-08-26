@@ -215,8 +215,9 @@ export function AnalyticsView() {
       <div className="card" style={{ marginBottom: "1rem", padding: "0.85rem" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "0.5rem", alignItems: "end" }}>
           <div>
-            <label className="form-label" style={{ fontSize: "0.75rem", marginBottom: "0.2rem" }}>Date du</label>
+            <label className="form-label" htmlFor="analytics-date-from" style={{ fontSize: "0.75rem", marginBottom: "0.2rem" }}>Date du</label>
             <input
+              id="analytics-date-from"
               type="date"
               className="form-control"
               style={{ padding: "0.4rem", minHeight: "38px", fontSize: "0.85rem" }}
@@ -225,8 +226,9 @@ export function AnalyticsView() {
             />
           </div>
           <div>
-            <label className="form-label" style={{ fontSize: "0.75rem", marginBottom: "0.2rem" }}>Au</label>
+            <label className="form-label" htmlFor="analytics-date-to" style={{ fontSize: "0.75rem", marginBottom: "0.2rem" }}>Au</label>
             <input
+              id="analytics-date-to"
               type="date"
               className="form-control"
               style={{ padding: "0.4rem", minHeight: "38px", fontSize: "0.85rem" }}
@@ -235,8 +237,9 @@ export function AnalyticsView() {
             />
           </div>
           <div>
-            <label className="form-label" style={{ fontSize: "0.75rem", marginBottom: "0.2rem" }}>Succursale</label>
+            <label className="form-label" htmlFor="analytics-location" style={{ fontSize: "0.75rem", marginBottom: "0.2rem" }}>Succursale</label>
             <select
+              id="analytics-location"
               className="form-control"
               style={{ padding: "0.4rem", minHeight: "38px", fontSize: "0.85rem" }}
               value={locationId}
@@ -249,8 +252,9 @@ export function AnalyticsView() {
             </select>
           </div>
           <div>
-            <label className="form-label" style={{ fontSize: "0.75rem", marginBottom: "0.2rem" }}>Catégorie</label>
+            <label className="form-label" htmlFor="analytics-category" style={{ fontSize: "0.75rem", marginBottom: "0.2rem" }}>Catégorie</label>
             <select
+              id="analytics-category"
               className="form-control"
               style={{ padding: "0.4rem", minHeight: "38px", fontSize: "0.85rem" }}
               value={categoryId}
