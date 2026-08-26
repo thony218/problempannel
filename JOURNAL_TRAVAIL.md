@@ -27,13 +27,16 @@ Un simple « fini » n'est pas une entrée valide (cf. `03_execution/02_HANDOFFS
 
 ## État global
 
+> Ce tableau est un état courant, mis à jour au fil des entrées. Les entrées
+> elles-mêmes restent append-only. Dernière mise à jour : 2026-08-25.
+
 | Vague | Statut |
 |---|---|
-| Bootstrap 0 | PRESQUE TERMINÉ — il ne reste que "CI verte" (bloqué : aucun remote Git configuré) |
+| Bootstrap 0 | TERMINÉ — remote `origin` configuré, CI verte observée sur les derniers push (`gh run list`) |
 | Vague A — Fondations | TERMINÉ (FND-* + AUTH-01..05 + META-01/02 + ISSUE-01..06 + LIST-01..04 + DETAIL-01/02 + FLOW-01..04 + QA-01 faits) |
 | Vague B — Tranches verticales | TERMINÉ (COM-01..03, ATT-01..03, ACT-01..03, HIST-01/02, FLOW-05/06, LINK-01..03 faits) |
 | Vague C — Analytique & Administration | TERMINÉ (ANA-01..05 + ADM-01..03 + V3-PRIV-01 faits) |
-| Vague D — Assurance Qualité & Exploitation | NON DÉMARRÉE |
+| Vague D — Assurance Qualité & Exploitation | EN COURS — QA-01..05 faits, volumétrie p95 mesurée en local, 54/54 scénarios d'acceptation couverts. Restent OPS-04 (backup/restore), OPS-05 (gate confidentialité), OPS-06 (recette GO/NO-GO) et la recette authentifiée |
 
 ---
 
@@ -1002,3 +1005,90 @@ Le parcours E2E n'était pas écrivable avant que l'identité de développement 
 - **Limitations connues / dette** : le `302` prouve le périmètre Access, pas le comportement authentifié de l'application. Le gate de confidentialité R2 reste non approuvé; aucune ouverture aux employés ni donnée réelle n'a été ajoutée. Les modifications locales restent non commitées et le remote GitHub n'a pas été modifié.
 - **RFC ouverte** : non; `RFC-2026-001` reste acceptée et implémentée.
 - **Prochain propriétaire** : propriétaire Cloudflare/projet, pour effectuer la recette authentifiée et approuver le gate de confidentialité avant toute ouverture aux employés ou saisie de données réelles.
+
+### 2026-08-25 — Volumétrie 100 000 dossiers et parcours E2E complet (QA-04)
+
+- **Task IDs** : `QA-04` (parcours E2E complet), plus la couverture des scénarios d'acceptation restés non testés. La mesure de volumétrie n'a **pas** d'identifiant au backlog : elle répond à `01_produit/06_EXIGENCES_NON_FONCTIONNELLES.md` §Performance p95 et à `05_qualite_exploitation/02_PLAN_TESTS.md` §Volumétrie, qui n'avaient jamais été exécutés.
+- **Date** : 2026-08-25.
+- **Owner** : Claude (agent), sur demande explicite de l'utilisateur (« Go pour 3-4 » — volumétrie p95, puis parcours E2E complet et scénarios manquants).
+- **Commit(s)** : aucun. Aucun commit, push ni déploiement n'a été autorisé dans cette intervention.
+- **Sauvegarde** : `/Users/anthobruneau/Downloads/Back up Codex/registre_erreurs_v4_final_2026-08-25_volumetrie-p95-et-e2e-complet.tar.gz`, créée avant la première écriture. Aucune sauvegarde existante n'a été remplacée.
+- **Lu avant d'implémenter** : `AGENTS.md`, état global et dernières entrées de ce journal, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`, `01_produit/06_EXIGENCES_NON_FONCTIONNELLES.md`, `01_produit/07_SCENARIOS_ACCEPTATION.md`, `01_produit/03_MATRICE_TRANSITIONS.md`, `01_produit/04_MATRICE_PERMISSIONS.md`, `01_produit/08_DEFINITIONS_ANALYTIQUES.md`, `01_produit/ux/02_ECRAN_NOUVEAU.md`, `01_produit/ux/05_ETATS_ET_MESSAGES.md`, `02_contrats/05_ERREURS.md`, `05_qualite_exploitation/02_PLAN_TESTS.md`.
+
+#### 1. Volumétrie et budgets p95
+
+Nouveau harnais isolé (`tests/perf/`, `vitest.perf.config.ts`, `npm run test:perf`), **hors** de `npm run verify` : amorcer 100 000 dossiers prend une vingtaine de secondes et n'a pas à peser sur chaque commit.
+
+Le jeu de données est déterministe (`mulberry32` à graine fixe) — sans cela, une régression de performance serait indiscernable du bruit de tirage. Volume et itérations passent par une **liaison Miniflare** et non par `process.env` : une première version lisait `process.env.PERF_ISSUES` depuis workerd, où il est vide, et mesurait donc toujours 100 000 dossiers en annonçant le volume demandé.
+
+Mesure à **100 000 dossiers**, 100 utilisateurs, 20 itérations par endpoint, percentile par rang le plus proche. **Tous les budgets sont tenus**, avec une marge d'un à deux ordres de grandeur :
+
+| Endpoint | p95 | Budget |
+|---|---:|---:|
+| `GET /me` | 1 ms | 500 ms |
+| `GET /issues` (page 1) | 1 ms | 750 ms |
+| `GET /issues` (filtres combinés) | 5 ms | 750 ms |
+| `GET /issues?sort=dueDate` | 11 ms | 750 ms |
+| `GET /issues?q=` sans correspondance | 14 ms | 750 ms |
+| `GET /issues` (dernière page par curseur) | 1 ms | 750 ms |
+| `GET /issues/{publicId}` | 1 ms | 750 ms |
+| `POST /issues` | 2 ms | 1 000 ms |
+| `PATCH /issues/{publicId}` | 2 ms | 1 000 ms |
+| `GET /analytics/summary` | 39 ms | 2 000 ms |
+| `GET /analytics/recurring` | 167 ms | 2 000 ms |
+| `GET /analytics/errors-by-employee` | 9 ms | 2 000 ms |
+
+Deux points méritent d'être notés. La pagination par curseur tient sa promesse : la dernière page coûte le même prix que la première, là où un `OFFSET` aurait dérivé. Et la recherche `LIKE '%…%'` sans index, identifiée comme le risque principal, reste à 14 ms dans son **pire** cas — un terme sans aucune correspondance, qui force le balayage complet; un terme rare mais présent est plus rapide, `LIMIT` arrêtant le balayage. L'absence d'index plein texte n'est donc pas un problème à cette volumétrie.
+
+**Ce que cette mesure ne prouve pas** : elle s'exécute sur le D1 local de Miniflare, un SQLite sur disque appelé sans réseau. Elle mesure le coût des requêtes à l'échelle réelle — plans d'exécution, index servis ou non, balayages. Elle ne remplace pas la « p95 staging » exigée : latence réseau, placement de la base, concurrence et démarrage à froid du Worker n'y figurent pas. Un dépassement ici serait certain; un succès ici reste nécessaire, pas suffisant.
+
+#### 2. `QA-04` — parcours de bout en bout complet
+
+`tests/e2e/lifecycle.spec.ts` suit **un seul dossier** sur toute la chaîne du plan de tests : création → prise en charge → attente → reprise → action corrective → résolution `pending` → efficacité → réouverture. Joué dans l'interface, pas par appels d'API : c'est la seule façon de démontrer qu'un employé et un gestionnaire mènent réellement un dossier de bout en bout.
+
+**Écrire ce test a révélé que ce n'était pas le cas.** Deux défauts bloquants, chacun invisible aux tests existants :
+
+1. **Aucun champ de sous-catégorie pour le gestionnaire** (`EditIssueModal.tsx`). Toute sortie de `new` en exige une (`03_MATRICE_TRANSITIONS.md` §Préconditions), et l'écran Nouveau annonce à l'employé qu'elle « sera confirmée à la prise en charge » (`ux/02_ECRAN_NOUVEAU.md`). Le sélecteur n'existait que dans la section réservée à l'employé créateur. **Conséquence mesurée : tout dossier déclaré sans sous-catégorie — le cas normal — ne pouvait pas être pris en charge depuis l'interface.** L'API répondait 422 sur un champ que l'écran n'affichait nulle part. Le workflow complet était inaccessible.
+2. **Messages de validation jetés** (même fichier). `ux/05_ETATS_ET_MESSAGES.md` impose pour un 422 « messages champs fournis par API » et interdit d'expliquer une erreur de validation autrement. Le code n'affichait que `error.message`, générique (« Validation échouée. »), en ignorant `error.fields` où le serveur place la cause. **Un gestionnaire dont la résolution était refusée parce qu'une action corrective bloquante restait ouverte voyait « Validation échouée. » et rien d'autre.** Corrigé par `describeApiError`, couvert par `tests/app/api-error-messages.test.ts`.
+
+Ajout par ailleurs de 15 `data-testid` sur les champs d'attente, de cause, de résolution et d'efficacité, et sur le badge de statut : ils n'étaient repérables que par leur position dans le DOM, ce qui rend un test muet dès qu'une mise en page change.
+
+#### 3. Scénarios d'acceptation — couverture complète
+
+Les 54 scénarios de `01_produit/07_SCENARIOS_ACCEPTATION.md` sont désormais tous rattachés à un test. Quatorze ne l'étaient pas; six étaient couverts sans être étiquetés (S14, S29, S30, S32, S33, S34, S35, S36 — titres complétés), huit manquaient réellement :
+
+- **S05** triage complet en un seul PATCH, avec vérification qu'il n'écrit **qu'un** événement d'historique (le lot est une transaction, une écriture partielle serait un dossier à moitié trié).
+- **S09** attente externe sans libellé → 422, sur les trois types (`supplier`, `customer`, `other`) et sur un libellé vide, avec vérification que le dossier n'a pas bougé.
+- **S18 / S19** HEIC et HEIF acceptés. Le code de détection existait mais **aucun test ne l'exerçait avec de vrais octets** : la liste des types autorisés était vérifiée, la reconnaissance des signatures ne l'était pas. Nouvelles fixtures `heicFile` / `heifFile` avec une boîte `ftyp` complète. Ajout d'un test de non-régression : un MP4 renommé `.heic` doit être refusé, le conteneur ISO-BMFF étant commun aux deux.
+- **S26** sous-catégorie sans `categoryId` → 422, plus la contrainte au contrat.
+- **S27** création de succursale avec champ parent : impossible au contrat (`additionalProperties: false`, aucune propriété de parenté) et sans effet en pratique; la table n'a aucune colonne `parent_id`.
+- **S28** catégorie désactivée : absente de `/meta`, dossiers existants toujours lisibles **et listables**.
+- **S31** cinq dossiers sans sous-catégorie ne forment pas une récurrence, et aucun ne peut quitter `new` — les deux moitiés sont testées ensemble, car la première seule signifierait que ces dossiers restent invisibles pour toujours.
+- **S38** ordre exact des neuf blocs de l'écran Nouveau. **Défaut réel corrigé : la priorité était rendue en 6e position, avant la description et les impacts**, alors que `ux/02_ECRAN_NOUVEAU.md` §« Ordre exact » la place en 8e. Le bloc a été déplacé sans autre modification.
+- **S48 / S49** discipline de collecte : aucun motif `include` d'aucune configuration Vitest ne peut attraper un fichier de `tests/e2e`, vérifié par traduction glob→regex sur les fichiers réellement présents, et non par simple présence d'une chaîne.
+
+**Sensibilité vérifiée par mutation** sur les assertions qui pouvaient être vertes par construction : remise du bloc Priorité à sa place fautive (S38 échoue), ajout d'un `parentId` au contrat et retrait de `categoryId` des champs requis (S26/S27 échouent), élargissement d'un `include` Vitest à `tests/**/*.ts` (S49 échoue en nommant le motif et le fichier attrapé). Le contrat et `vitest.config.ts` ont été restaurés à l'identique après chaque mutation (`git diff --stat` vide).
+
+#### 4. Mise à jour du tableau « État global »
+
+Le tableau en tête de ce journal annonçait encore « Bootstrap 0 : bloqué, aucun remote Git » et « Vague D : NON DÉMARRÉE ». Les deux étaient faux : le remote existe et `gh run list` montre la CI verte sur les cinq derniers push. Le tableau a été corrigé; **aucune entrée passée n'a été modifiée**.
+
+- **Fichiers produits** : `tests/perf/volumetrie.test.ts`, `tests/perf/support/dataset.ts`, `tests/perf/support/measure.ts`, `vitest.perf.config.ts`, `tests/e2e/lifecycle.spec.ts`, `tests/app/api-error-messages.test.ts`, `tests/app/openapi-contract.test.ts`, `tests/app/test-collection.test.ts`.
+- **Fichiers modifiés** : `src/features/issues/EditIssueModal.tsx`, `src/features/issues/CreateIssueForm.tsx`, `src/features/issues/IssueDetailView.tsx`, `tests/api/{admin,analytics,attachments,issues-detail,issues-list,issues-update}.test.ts`, `tests/api/support/fixtures.ts`, `tests/app/issue-views.test.tsx`, `package.json` (script `test:perf`), `tsconfig.test.json`, ce journal.
+- **Commandes exécutées** :
+  - `npm run verify` → **exit 0**, **261 tests** dans 35 fichiers (234 dans 32 avant l'intervention). L'avertissement OpenAPI historique sur la réponse 4XX de `/health` demeure, inchangé.
+  - `npx playwright test` → **81 tests passés** sur chromium, mobile-chrome et mobile-safari (78 avant).
+  - `npm run test:perf` → **21 tests passés**, 100 000 dossiers, 23,4 s.
+  - `git diff --check` → **PASS**.
+  - Mutations de sensibilité décrites au §3, avec restauration vérifiée.
+- **`npm run verify`** : **PASS** (exit 0).
+- **Staging / production testés** : **non**. Aucune migration distante, aucun déploiement, aucune modification Cloudflare. La production reste sur la version `2a0c0b69` déployée le 2026-08-25; **elle ne porte donc aucun des deux correctifs d'interface décrits au §2**.
+- **Limitations connues / dette** :
+  - Les deux correctifs d'interface ne sont ni commités ni déployés. Tant que ce n'est pas fait, la prise en charge d'un dossier reste impossible en production pour tout dossier déclaré sans sous-catégorie.
+  - La mesure p95 est locale, pas en staging (voir §1). La « p95 staging » du plan de tests reste à produire.
+  - `ux/05_ETATS_ET_MESSAGES.md` demande un message de validation **sous le champ** concerné. Le correctif remonte les messages de l'API dans le bandeau de la modale, ce qui satisfait « messages champs fournis par API » mais pas encore le placement sous champ. À traiter comme une tâche d'interface distincte.
+  - `wrangler.jsonc` conserve `REPLACE_ME` et `REPLACE_DEV_D1_ID` dans la section de développement.
+  - Restent non traités, hors périmètre de cette demande : `OPS-04` (backup/restore prouvé), `OPS-05` (gate confidentialité), `OPS-06` (recette GO/NO-GO), la recette authentifiée, l'audit d'accessibilité WCAG 2.1 AA et la couverture Firefox/Edge exigée par les NFR (Playwright ne cible que chromium, mobile-chrome et mobile-safari).
+  - Écart signalé et non traité : le D1 de production contient **1 dossier et 5 succursales** alors que le seed n'en crée qu'une (`CORP`) et que le gate de confidentialité n'est pas approuvé. Aucune entrée de ce journal ne rend compte de ces ajouts.
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : propriétaire du projet, pour décider du commit/push puis du déploiement des deux correctifs d'interface, et pour trancher l'écart de données de production signalé ci-dessus.

@@ -573,34 +573,6 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
         </div>
       )}
 
-      {/* Priorité */}
-      <div className="form-group">
-        <span className="form-label required">Priorité</span>
-        <div className="radio-group" role="radiogroup" aria-label="Niveau de priorité">
-          {(
-            [
-              { value: "normal", label: "Normale" },
-              { value: "important", label: "Importante" },
-              { value: "urgent", label: "Urgente" },
-            ] as const
-          ).map((p) => (
-            <label
-              key={p.value}
-              className={`radio-btn-label ${priority === p.value ? "selected" : ""}`}
-            >
-              <input
-                type="radio"
-                name="priority"
-                value={p.value}
-                checked={priority === p.value}
-                onChange={() => setPriority(p.value)}
-              />
-              {p.label}
-            </label>
-          ))}
-        </div>
-      </div>
-
       {/* Description */}
       <div className="form-group">
         <label htmlFor="description" className="form-label required">
@@ -652,6 +624,34 @@ export function CreateIssueForm({ onSuccess }: CreateIssueFormProps) {
                 </div>
               );
             })}
+        </div>
+      </div>
+
+      {/* Priorité */}
+      <div className="form-group">
+        <span className="form-label required">Priorité</span>
+        <div className="radio-group" role="radiogroup" aria-label="Niveau de priorité">
+          {(
+            [
+              { value: "normal", label: "Normale" },
+              { value: "important", label: "Importante" },
+              { value: "urgent", label: "Urgente" },
+            ] as const
+          ).map((p) => (
+            <label
+              key={p.value}
+              className={`radio-btn-label ${priority === p.value ? "selected" : ""}`}
+            >
+              <input
+                type="radio"
+                name="priority"
+                value={p.value}
+                checked={priority === p.value}
+                onChange={() => setPriority(p.value)}
+              />
+              {p.label}
+            </label>
+          ))}
         </div>
       </div>
 

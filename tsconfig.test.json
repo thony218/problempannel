@@ -25,6 +25,8 @@
     "tests/**/*.test.tsx",
     "tests/setup.ts",
     "vitest.config.ts",
-    "worker-configuration.d.ts"
+    "worker-configuration.d.ts",
+    "tests/perf/**/*.ts",
+    "vitest.perf.config.ts"
   ]
 }

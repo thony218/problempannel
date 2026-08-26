@@ -85,7 +85,7 @@ describe("GET /api/issues/:publicId", () => {
     expect(body.error.code).toBe("NOT_FOUND");
   });
 
-  it("returns 404 for a malformed publicId", async () => {
+  it("S14: returns 404 for a malformed publicId", async () => {
     const res = await get("/issues/not-a-valid-id");
     expect(res.status).toBe(404);
   });

@@ -346,7 +346,7 @@ describe("GET /api/issues", () => {
     expect(body.data.items[0].description).toBe("En retard");
   });
 
-  it("filters by effectivenessReviewDueBefore", async () => {
+  it("S34: filters by effectivenessReviewDueBefore, returning due pending files", async () => {
     // Dossier résolu pending avec date de revue échue
     await env.DB.prepare(
       `INSERT INTO issues (occurred_on, created_by_user_id, location_id, category_id, subcategory_id, description, priority, status, effectiveness_status, effectiveness_review_date)

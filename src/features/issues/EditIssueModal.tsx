@@ -17,6 +17,26 @@ interface EditIssueModalProps {
   onReload: () => Promise<void>;
 }
 
+/**
+ * Message d'erreur affichable à partir du corps normalisé du Worker.
+ *
+ * `01_produit/ux/05_ETATS_ET_MESSAGES.md` impose pour un 422 « messages champs
+ * fournis par API » et interdit d'expliquer une erreur de validation autrement
+ * que par ces messages. Le code se contentait de `error.message`, qui vaut
+ * « Validation échouée. » : le gestionnaire dont la résolution est refusée
+ * parce qu'une action corrective bloquante reste ouverte — ou parce que la
+ * sous-catégorie manque — n'avait aucune indication de ce qu'il devait
+ * corriger, alors que le serveur la lui envoyait dans `error.fields`.
+ */
+export function describeApiError(body: any, status: number): string {
+  const fields = body?.error?.fields as Record<string, string> | undefined;
+  const details = fields ? Object.values(fields).filter(Boolean) : [];
+  if (details.length > 0) {
+    return details.join(" ");
+  }
+  return body?.error?.message || `Erreur lors de la mise à jour (${status}).`;
+}
+
 export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: EditIssueModalProps) {
   const { user, meta } = useAuth();
 
@@ -96,6 +116,10 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
     }
 
     if (isManager) {
+      if (categoryId !== issue.categoryId) payload.categoryId = categoryId;
+      if (subcategoryId !== (issue.subcategoryId || "")) {
+        payload.subcategoryId = subcategoryId ? Number(subcategoryId) : null;
+      }
       if (priority !== issue.priority) payload.priority = priority;
       if (ownerUserId !== (issue.ownerUserId || "")) payload.ownerUserId = ownerUserId ? Number(ownerUserId) : null;
       if (errorActorUserId !== (issue.errorActorUserId || "")) {
@@ -163,7 +187,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
 
       if (!res.ok) {
         const errData = (await res.json()) as any;
-        throw new Error(errData?.error?.message || `Erreur lors de la mise à jour (${res.status}).`);
+        throw new Error(describeApiError(errData, res.status));
       }
 
       await onSuccess();
@@ -211,7 +235,11 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
           </div>
         )}
 
-        {formError && !conflictError && <div className="alert alert-danger">{formError}</div>}
+        {formError && !conflictError && (
+          <div className="alert alert-danger" data-testid="edit-form-error">
+            {formError}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} data-testid="form-edit-issue">
           {/* Section Gestionnaire / Admin */}
@@ -298,6 +326,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                     className="form-control"
                     value={dueDate}
                     onChange={(e) => setDueDate(e.target.value)}
+                    data-testid="input-edit-duedate"
                   />
                 </div>
               </div>
@@ -325,6 +354,66 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                 </div>
               </div>
 
+              {/* Triage : catégorie et sous-catégorie.
+
+                  `01_produit/03_MATRICE_TRANSITIONS.md` §Préconditions impose
+                  une sous-catégorie pour **toute** sortie de `new`, et
+                  `01_produit/ux/02_ECRAN_NOUVEAU.md` annonce à l'employé que
+                  la sous-catégorie « sera confirmée à la prise en charge ».
+                  Ce champ n'existait que dans la section réservée à l'employé
+                  créateur : un gestionnaire ne disposait d'aucun moyen de la
+                  renseigner, et toute prise en charge d'un dossier déclaré
+                  sans sous-catégorie échouait en 422 sans issue possible
+                  depuis l'interface. */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="edit-category">Catégorie</label>
+                  <select
+                    id="edit-category"
+                    className="form-control"
+                    value={categoryId}
+                    onChange={(e) => {
+                      const nextCategoryId = Number(e.target.value);
+                      setCategoryId(nextCategoryId);
+                      // La sous-catégorie appartient à une catégorie : la
+                      // conserver après un changement de catégorie produirait
+                      // un couple incohérent, refusé par le serveur.
+                      if (nextCategoryId !== categoryId) setSubcategoryId("");
+                    }}
+                    data-testid="select-edit-category"
+                  >
+                    {meta?.categories
+                      .filter((c) => c.active || c.id === issue.categoryId)
+                      .map((c) => (
+                        <option key={c.id} value={c.id}>{c.label}</option>
+                      ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className={`form-label ${status !== "new" ? "required" : ""}`} htmlFor="edit-subcategory">
+                    Sous-catégorie
+                  </label>
+                  <select
+                    id="edit-subcategory"
+                    className="form-control"
+                    value={subcategoryId}
+                    onChange={(e) => setSubcategoryId(e.target.value ? Number(e.target.value) : "")}
+                    data-testid="select-edit-subcategory"
+                  >
+                    <option value="">-- À confirmer --</option>
+                    {meta?.subcategories
+                      .filter((sub) => sub.parentId === categoryId)
+                      .map((sub) => (
+                        <option key={sub.id} value={sub.id}>{sub.label}</option>
+                      ))}
+                  </select>
+                  <div style={{ fontSize: "0.75rem", color: "var(--color-text-muted)", marginTop: "0.25rem" }}>
+                    Requise pour faire sortir le dossier du statut « Nouveau ».
+                  </div>
+                </div>
+              </div>
+
               {/* Bloc Attente */}
               {status === "waiting" && (
                 <div style={{ padding: "0.75rem", backgroundColor: "#faf5ff", borderRadius: "var(--radius)", marginBottom: "1rem", border: "1px solid #e9d5ff" }}>
@@ -335,6 +424,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                       className="form-control"
                       value={waitingType}
                       onChange={(e) => setWaitingType(e.target.value as any)}
+                      data-testid="select-edit-waiting-type"
                     >
                       <option value="supplier">Fournisseur</option>
                       <option value="customer">Client</option>
@@ -349,6 +439,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                         className="form-control"
                         value={waitingUserId}
                         onChange={(e) => setWaitingUserId(e.target.value ? Number(e.target.value) : "")}
+                        data-testid="select-edit-waiting-user"
                         required
                       >
                         <option value="">-- Sélectionner --</option>
@@ -366,6 +457,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                         placeholder="Ex : Transporteur X, Client ABC..."
                         value={waitingLabel}
                         onChange={(e) => setWaitingLabel(e.target.value)}
+                        data-testid="input-edit-waiting-label"
                         required
                       />
                     </div>
@@ -383,6 +475,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                       className="form-control"
                       value={causeStatus}
                       onChange={(e) => setCauseStatus(e.target.value as any)}
+                      data-testid="select-edit-cause-status"
                     >
                       <option value="">-- Non spécifié --</option>
                       <option value="known">Connue</option>
@@ -395,6 +488,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                       className="form-control"
                       value={permanentType}
                       onChange={(e) => setPermanentType(e.target.value)}
+                      data-testid="select-edit-permanent-type"
                     >
                       <option value="">-- Non spécifié --</option>
                       <option value="procedureUpdate">Mise à jour de procédure</option>
@@ -417,6 +511,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                     rows={2}
                     value={causeSummary}
                     onChange={(e) => setCauseSummary(e.target.value)}
+                    data-testid="textarea-edit-cause-summary"
                   />
                 </div>
 
@@ -427,6 +522,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                     rows={2}
                     value={immediateSolution}
                     onChange={(e) => setImmediateSolution(e.target.value)}
+                    data-testid="textarea-edit-immediate-solution"
                   />
                 </div>
 
@@ -437,6 +533,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                     rows={2}
                     value={permanentSummary}
                     onChange={(e) => setPermanentSummary(e.target.value)}
+                    data-testid="textarea-edit-permanent-summary"
                   />
                 </div>
 
@@ -447,6 +544,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                     rows={2}
                     value={finalResult}
                     onChange={(e) => setFinalResult(e.target.value)}
+                    data-testid="textarea-edit-final-result"
                   />
                 </div>
 
@@ -457,6 +555,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                     rows={2}
                     value={preventionLearning}
                     onChange={(e) => setPreventionLearning(e.target.value)}
+                    data-testid="textarea-edit-prevention-learning"
                   />
                 </div>
               </div>
@@ -472,6 +571,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                         className="form-control"
                         value={effectivenessStatus}
                         onChange={(e) => setEffectivenessStatus(e.target.value as any)}
+                        data-testid="select-edit-effectiveness-status"
                       >
                         <option value="">-- Non évalué --</option>
                         <option value="pending">En attente (Pending)</option>
@@ -486,6 +586,7 @@ export function EditIssueModal({ issue, etag, onClose, onSuccess, onReload }: Ed
                         className="form-control"
                         value={effectivenessReviewDate}
                         onChange={(e) => setEffectivenessReviewDate(e.target.value)}
+                        data-testid="input-edit-effectiveness-review-date"
                       />
                     </div>
                   </div>

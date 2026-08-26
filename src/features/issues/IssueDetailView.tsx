@@ -222,7 +222,9 @@ export function IssueDetailView() {
               {issue.publicId}
             </h1>
             <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
-              {getStatusBadge(issue.status)}
+              <span data-testid="issue-status-badge" data-status={issue.status}>
+                {getStatusBadge(issue.status)}
+              </span>
               {getPriorityBadge(issue.priority)}
             </div>
           </div>

@@ -28,6 +28,7 @@
     "verify": "npm run contract:lint && npm run contract:generate && npm run types:worker && npm run typecheck && npm run test && npm run build",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install --with-deps chromium webkit",
+    "test:perf": "vitest run --config vitest.perf.config.ts",
     "typecheck:e2e": "tsc -p tsconfig.e2e.json --noEmit"
   },
   "dependencies": {

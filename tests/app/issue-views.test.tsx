@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
 import React from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { renderAt, renderRoute } from "./support/render";
@@ -16,6 +18,7 @@ import { AnalyticsView } from "../../src/features/analytics/AnalyticsView";
 import { AdminView } from "../../src/features/admin/AdminView";
 import { RedactModal } from "../../src/features/admin/RedactModal";
 import { HomeView } from "../../src/features/home/HomeView";
+import { CreateIssueForm } from "../../src/features/issues/CreateIssueForm";
 
 /**
  * Rendu HTML réel des écrans (LIST-04, DETAIL-02, COM-03, ATT-03, ACT-03,
@@ -409,5 +412,138 @@ describe("Routage et état d'URL (S39, S41, liens profonds)", () => {
     const html = renderRoute("/dossiers/:publicId", <IssueDetailView />, "/dossiers/INC-000123");
     expect(html).toContain("INC-000123");
     expect(html).toContain('data-testid="detail-loading"');
+  });
+});
+
+/**
+ * S38 : « Nouveau respecte l'ordre des 9 blocs ».
+ *
+ * `01_produit/ux/02_ECRAN_NOUVEAU.md` §« Ordre exact » fige la séquence :
+ * occurredOn, locationId, departmentId, categoryId, subcategoryId,
+ * description, impacts, priority, fichiers.
+ *
+ * La vérification est faite en deux temps parce que le bloc sous-catégorie
+ * est conditionnel — il n'apparaît qu'une fois une catégorie choisie, donc
+ * jamais au premier rendu, et `renderToStaticMarkup` n'exécute ni effet ni
+ * interaction. Le premier test lit l'ordre déclaré dans le composant, seul
+ * endroit où les neuf blocs coexistent; le second confirme que cet ordre
+ * source est bien celui du HTML produit.
+ *
+ * Une assertion de simple présence serait restée verte sur le défaut réel :
+ * les neuf blocs existaient tous, mais la priorité était rendue en 6e
+ * position, avant la description et les impacts.
+ */
+describe("S38: ordre des blocs de l'écran Nouveau", () => {
+  const FORM_SOURCE = readFileSync(
+    path.join(process.cwd(), "src", "features", "issues", "CreateIssueForm.tsx"),
+    "utf-8"
+  );
+
+  /** Commentaire de bloc dans le composant, dans l'ordre imposé. */
+  const SOURCE_BLOCKS = [
+    "{/* Date de survenance */}",
+    "{/* Succursale */}",
+    "{/* Département (facultatif) */}",
+    "{/* Catégorie */}",
+    "{/* Sous-catégorie */}",
+    "{/* Description */}",
+    "{/* Impacts */}",
+    "{/* Priorité */}",
+    "{/* Photos / Pièces jointes locales (ISSUE-06) */}",
+  ];
+
+  /** Repères des blocs réellement rendus au premier affichage. */
+  const RENDERED_BLOCKS = [
+    { name: "1. occurredOn", marker: 'for="occurredOn"' },
+    { name: "2. locationId", marker: 'for="locationId"' },
+    { name: "3. departmentId", marker: 'for="departmentId"' },
+    { name: "4. categoryId", marker: 'for="categoryId"' },
+    { name: "6. description", marker: 'for="description"' },
+    { name: "7. impacts", marker: ">Impacts constatés<" },
+    { name: "8. priority", marker: ">Priorité<" },
+    { name: "9. fichiers", marker: 'for="attachment-input"' },
+  ];
+
+  it("declares the nine blocks in the exact order frozen by the UX spec", () => {
+    const positions = SOURCE_BLOCKS.map((marker) => {
+      const index = FORM_SOURCE.indexOf(marker);
+      expect(index, `bloc absent du composant : ${marker}`).toBeGreaterThanOrEqual(0);
+      expect(FORM_SOURCE.indexOf(marker, index + 1), `repère en double : ${marker}`).toBe(-1);
+      return { marker, index };
+    });
+
+    const declared = [...positions].sort((a, b) => a.index - b.index).map((b) => b.marker);
+    expect(declared).toEqual(SOURCE_BLOCKS);
+  });
+
+  it("renders those blocks in the declared order", () => {
+    mockAuthAs("employee");
+    const html = renderAt(<CreateIssueForm />, "/nouveau");
+
+    const positions = RENDERED_BLOCKS.map((block) => {
+      const index = html.indexOf(block.marker);
+      expect(index, `bloc absent du formulaire : ${block.name}`).toBeGreaterThanOrEqual(0);
+      expect(html.indexOf(block.marker, index + 1), `repère ambigu : ${block.name}`).toBe(-1);
+      return { ...block, index };
+    });
+
+    const rendered = [...positions].sort((a, b) => a.index - b.index).map((b) => b.name);
+    expect(rendered).toEqual(RENDERED_BLOCKS.map((b) => b.name));
+  });
+
+  it("keeps the subcategory block between category and description", () => {
+    // Le bloc conditionnel n'est pas rendu au premier affichage : sa place est
+    // donc vérifiée là où elle est décidée, dans le composant.
+    const category = FORM_SOURCE.indexOf("{/* Catégorie */}");
+    const subcategory = FORM_SOURCE.indexOf("{/* Sous-catégorie */}");
+    const description = FORM_SOURCE.indexOf("{/* Description */}");
+    expect(subcategory).toBeGreaterThan(category);
+    expect(subcategory).toBeLessThan(description);
+  });
+});
+
+/**
+ * Le triage exige une sous-catégorie pour toute sortie de `new`
+ * (`01_produit/03_MATRICE_TRANSITIONS.md`). Le champ n'existait que dans la
+ * section de l'employé créateur : un gestionnaire ne pouvait pas prendre en
+ * charge un dossier déclaré sans sous-catégorie, l'API répondant 422 sur un
+ * champ que l'interface n'affichait nulle part.
+ */
+describe("Triage: sous-catégorie accessible au gestionnaire", () => {
+  it("exposes the subcategory selector to a manager on a new file", () => {
+    mockAuthAs("manager", 9);
+    const html = renderRoute(
+      "/dossiers/:publicId",
+      <EditIssueModal
+        issue={baseIssue({ status: "new", subcategoryId: null })}
+        etag={'"1-1"'}
+        onClose={() => {}}
+        onSuccess={async () => {}}
+        onReload={async () => {}}
+      />,
+      "/dossiers/INC-000001"
+    );
+
+    expect(html).toContain('data-testid="select-edit-subcategory"');
+    expect(html).toContain('data-testid="select-edit-category"');
+    // La sous-catégorie proposée appartient bien à la catégorie du dossier.
+    expect(html).toContain("Prix");
+  });
+
+  it("does not expose the manager triage selectors to the creating employee", () => {
+    mockAuthAs("employee", 1);
+    const html = renderRoute(
+      "/dossiers/:publicId",
+      <EditIssueModal
+        issue={baseIssue({ status: "new", createdByUserId: 1 })}
+        etag={'"1-1"'}
+        onClose={() => {}}
+        onSuccess={async () => {}}
+        onReload={async () => {}}
+      />,
+      "/dossiers/INC-000001"
+    );
+
+    expect(html).not.toContain('data-testid="select-edit-subcategory"');
   });
 });

@@ -18,3 +18,38 @@ export function jpegBytes(payload = "contenu"): ArrayBuffer {
 export function jpegFile(name = "photo.jpg", payload = "contenu"): File {
   return new File([jpegBytes(payload)], name, { type: "image/jpeg" });
 }
+
+/**
+ * En-tête ISO-BMFF d'une image HEIF/HEIC (S18, S19).
+ *
+ * Structure réelle du début d'un fichier produit par un iPhone : boîte `ftyp`
+ * (taille sur 4 octets, type `ftyp`), marque majeure aux octets 8 à 11, version
+ * mineure, puis la liste des marques compatibles. `worker/domain/fileSignature.ts`
+ * ne lit que la marque majeure, mais la boîte est écrite en entier pour que la
+ * fixture reste un en-tête valide et non un motif taillé sur mesure pour le
+ * détecteur.
+ *
+ * @param brand marque majeure — `heic` pour un HEIC, `mif1` pour un HEIF.
+ */
+export function heifBytes(brand: "heic" | "mif1" = "heic", payload = "contenu"): ArrayBuffer {
+  const ascii = (text: string): number[] => Array.from(text).map((c) => c.charCodeAt(0));
+  const header = [
+    0x00, 0x00, 0x00, 0x18, // taille de la boîte : 24 octets
+    ...ascii("ftyp"),
+    ...ascii(brand), // marque majeure
+    0x00, 0x00, 0x00, 0x00, // version mineure
+    ...ascii("mif1"), // marques compatibles
+  ];
+  const body = Array.from(new TextEncoder().encode(payload));
+  return new Uint8Array([...header, ...body]).buffer;
+}
+
+/** Fichier HEIC valide, tel qu'un iPhone en produit. */
+export function heicFile(name = "photo.heic", payload = "contenu"): File {
+  return new File([heifBytes("heic", payload)], name, { type: "image/heic" });
+}
+
+/** Fichier HEIF valide (marque générique `mif1`). */
+export function heifFile(name = "photo.heif", payload = "contenu"): File {
+  return new File([heifBytes("mif1", payload)], name, { type: "image/heif" });
+}

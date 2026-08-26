@@ -81,7 +81,7 @@ beforeEach(async () => {
 });
 
 describe("ANA-01..04: Endpoints Analytique et Récurrence", () => {
-  it("computes accurate summary KPI metrics via GET /analytics/summary (ANA-02)", async () => {
+  it("S33: computes summary KPIs including averageResolutionHours = resolvedAt - createdAt (ANA-02)", async () => {
     // Insérer des dossiers avec différents statuts
     // 1. Ouvert urgent
     await env.DB.prepare(
@@ -147,7 +147,7 @@ describe("ANA-01..04: Endpoints Analytique et Récurrence", () => {
     expect(summaryBody.data.overdue).toBe(0);
   });
 
-  it("detects local vs organizational recurrence groups with 3/90 threshold (ANA-03)", async () => {
+  it("S29, S30: detects local vs organizational recurrence groups with 3/90 threshold (ANA-03)", async () => {
     // Créer 3 dossiers dans location MTL pour subcategory1Id -> déclenche récurrence locale & organisationnelle
     for (let i = 1; i <= 3; i++) {
       await env.DB.prepare(
@@ -192,7 +192,76 @@ describe("ANA-01..04: Endpoints Analytique et Récurrence", () => {
     expect(orgGroups.map((g: any) => g.subcategoryId)).toContain(subcategory2Id);
   });
 
-  it("calculates effectiveness rates based strictly on issues.effectiveness_status (ANA-02)", async () => {
+  /**
+   * S31 : « 5 catégories sans sous-cat ne sont pas récurrentes — mais ne
+   * peuvent sortir new ».
+   *
+   * `01_produit/08_DEFINITIONS_ANALYTIQUES.md` groupe la récurrence sur
+   * `subcategory_id`, jamais sur la catégorie. Cinq déclarations dans la même
+   * catégorie, toutes sans sous-catégorie, ne constituent donc pas une
+   * récurrence : elles ne sont pas encore qualifiées.
+   *
+   * Le scénario tient en deux moitiés indissociables. Si seule la première
+   * était vraie, ces dossiers resteraient invisibles pour toujours — le
+   * tableau de bord ignorerait une répétition réelle. La seconde est ce qui
+   * l'empêche : aucun de ces dossiers ne peut quitter `new` sans qu'un
+   * gestionnaire ait tranché la sous-catégorie, ce qui les fait entrer dans
+   * le calcul.
+   */
+  it("S31: five files without a subcategory are not recurrent, and cannot leave 'new'", async () => {
+    for (let i = 1; i <= 5; i += 1) {
+      await env.DB.prepare(
+        `INSERT INTO issues (occurred_on, location_id, category_id, subcategory_id, description, priority, status, created_by_user_id)
+         VALUES ('2026-08-20', ?, ?, NULL, ?, 'normal', 'new', ?)`
+      ).bind(locationMtlId, categoryId, `Erreur non qualifiee ${i}`, employeeId).run();
+    }
+
+    const res = await app.request("http://local/api/analytics/recurring", { headers: EMPLOYEE_HEADER }, env);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+
+    // Ni groupe local, ni groupe organisation : le regroupement se fait sur la
+    // sous-catégorie, et il n'y en a aucune.
+    expect(body.data).toHaveLength(0);
+
+    // Seconde moitié : aucun de ces dossiers ne peut être pris en charge tant
+    // que la sous-catégorie n'est pas tranchée.
+    const target = await env.DB.prepare(
+      "SELECT id FROM issues WHERE subcategory_id IS NULL ORDER BY id LIMIT 1"
+    ).first<{ id: number }>();
+    const publicId = `INC-${String(target!.id).padStart(6, "0")}`;
+
+    const detail = await app.request(`http://local/api/issues/${publicId}`, { headers: MANAGER_HEADER }, env);
+    const etag = detail.headers.get("ETag") as string;
+
+    const blocked = await app.request(
+      `http://local/api/issues/${publicId}`,
+      {
+        method: "PATCH",
+        headers: { ...MANAGER_HEADER, "If-Match": etag },
+        body: JSON.stringify({ status: "inProgress" }),
+      },
+      env
+    );
+    expect(blocked.status).toBe(422);
+    const blockedBody = (await blocked.json()) as any;
+    expect(blockedBody.error.fields.subcategoryId).toBeDefined();
+
+    // Une fois la sous-catégorie tranchée, le dossier avance et entre dans le
+    // périmètre du calcul de récurrence.
+    const allowed = await app.request(
+      `http://local/api/issues/${publicId}`,
+      {
+        method: "PATCH",
+        headers: { ...MANAGER_HEADER, "If-Match": etag },
+        body: JSON.stringify({ status: "inProgress", subcategoryId: subcategory1Id }),
+      },
+      env
+    );
+    expect(allowed.status).toBe(200);
+  });
+
+  it("S32: calculates effectiveness rates from issues.effectiveness_status, excluding pending (ANA-02)", async () => {
     // 2 effectifs, 1 inefficace, 3 pending
     for (let i = 0; i < 2; i++) {
       await env.DB.prepare(

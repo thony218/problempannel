@@ -36,6 +36,7 @@ let userId: number;
 let secondUserId: number;
 let otherEmployeeId: number;
 let locationId: number;
+let departmentId: number;
 let categoryId: number;
 let otherCategoryId: number;
 let subcategoryId: number;
@@ -51,6 +52,7 @@ beforeEach(async () => {
     env.DB.prepare("DELETE FROM users"),
     env.DB.prepare("DELETE FROM subcategories"),
     env.DB.prepare("DELETE FROM categories"),
+    env.DB.prepare("DELETE FROM departments"),
     env.DB.prepare("DELETE FROM locations"),
     env.DB.prepare("DELETE FROM impact_types"),
     env.DB.prepare("DELETE FROM sqlite_sequence"),
@@ -76,6 +78,12 @@ beforeEach(async () => {
 
   locationId = (
     await env.DB.prepare("INSERT INTO locations (code, label) VALUES ('TEST', 'Succursale test') RETURNING id").first<{
+      id: number;
+    }>()
+  )!.id;
+
+  departmentId = (
+    await env.DB.prepare("INSERT INTO departments (code, label) VALUES ('warehouse_inventory', 'Entrepôt') RETURNING id").first<{
       id: number;
     }>()
   )!.id;
@@ -342,12 +350,107 @@ describe("PATCH /api/issues/:publicId", () => {
     expect(body.data.issue.status).toBe("inProgress");
   });
 
+  /**
+   * S05 : « triage complet → inProgress ».
+   *
+   * Le triage réel n'est pas une transition de statut isolée : le
+   * gestionnaire confirme la sous-catégorie, complète le département,
+   * désigne un responsable, pose une échéance et ajuste la priorité — en une
+   * seule requête, puisque l'interface n'envoie qu'un PATCH.
+   *
+   * Le test vérifie que ce lot passe entièrement et qu'il ne laisse **qu'un**
+   * événement d'historique : le lot est une transaction unique (G-007), une
+   * écriture partielle serait un dossier à moitié trié.
+   */
+  it("S05: accepts a complete triage moving the file to inProgress in a single PATCH", async () => {
+    const { publicId, etag } = await createIssue();
+    const issueId = Number(publicId.replace("INC-", ""));
+
+    const historyBefore = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM issue_history WHERE issue_id = ?"
+    ).bind(issueId).first<{ n: number }>();
+
+    const res = await patch(
+      `/issues/${publicId}`,
+      {
+        status: "inProgress",
+        subcategoryId,
+        departmentId,
+        ownerUserId: userId,
+        dueDate: "2026-09-15",
+        priority: "important",
+      },
+      { "If-Match": etag },
+      MANAGER_HEADER
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as any;
+    expect(body.data.issue.status).toBe("inProgress");
+    expect(body.data.issue.subcategoryId).toBe(subcategoryId);
+    expect(body.data.issue.departmentId).toBe(departmentId);
+    expect(body.data.issue.ownerUserId).toBe(userId);
+    expect(body.data.issue.dueDate).toBe("2026-09-15");
+    expect(body.data.issue.priority).toBe("important");
+
+    const historyAfter = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM issue_history WHERE issue_id = ?"
+    ).bind(issueId).first<{ n: number }>();
+    expect(historyAfter!.n).toBe(historyBefore!.n + 1);
+  });
+
   it("rejects status='waiting' without waitingOn", async () => {
     const { publicId, etag } = await createIssue({ subcategoryId });
     const res = await patch(`/issues/${publicId}`, { status: "waiting" }, { "If-Match": etag }, MANAGER_HEADER);
     expect(res.status).toBe(422);
     const body = (await res.json()) as any;
     expect(body.error.fields.waitingOn).toBeDefined();
+  });
+
+  /**
+   * S09 : « supplier sans label → 422 ».
+   *
+   * `01_produit/03_MATRICE_TRANSITIONS.md` §→ waiting exige un `waitingOn`
+   * valide, et le CHECK D1 refuse un type externe sans libellé. Sans libellé,
+   * la mise en attente est enregistrée mais personne ne sait sur **qui** le
+   * dossier attend : la raison de la stagnation est perdue. La règle est
+   * portée par le schéma (union discriminée), le test la fixe.
+   */
+  it("S09: rejects an external waitingOn without a label (422)", async () => {
+    const { publicId, etag } = await createIssue({ subcategoryId });
+
+    for (const type of ["supplier", "customer", "other"] as const) {
+      const res = await patch(
+        `/issues/${publicId}`,
+        { status: "waiting", waitingOn: { type } },
+        { "If-Match": etag },
+        MANAGER_HEADER
+      );
+      expect(res.status, `type d'attente ${type}`).toBe(422);
+    }
+
+    // Le dossier n'a pas bougé : aucune mise en attente partielle.
+    const row = await env.DB.prepare(
+      "SELECT status, waiting_on_type, waiting_on_label FROM issues WHERE id = ?"
+    ).bind(Number(publicId.replace("INC-", ""))).first<{
+      status: string;
+      waiting_on_type: string | null;
+      waiting_on_label: string | null;
+    }>();
+    expect(row!.status).toBe("new");
+    expect(row!.waiting_on_type).toBeNull();
+    expect(row!.waiting_on_label).toBeNull();
+  });
+
+  it("S09: rejects an external waitingOn whose label is blank (422)", async () => {
+    const { publicId, etag } = await createIssue({ subcategoryId });
+    const res = await patch(
+      `/issues/${publicId}`,
+      { status: "waiting", waitingOn: { type: "supplier", label: "" } },
+      { "If-Match": etag },
+      MANAGER_HEADER
+    );
+    expect(res.status).toBe(422);
   });
 
   it("accepts status='waiting' with a supplier waitingOn + label (manager)", async () => {
@@ -453,7 +556,7 @@ describe("PATCH /api/issues/:publicId", () => {
     expect(res.status).toBe(422);
   });
 
-  it("records a privacy-safe issue_updated history event without free-text values", async () => {
+  it("S35: records a privacy-safe issue_updated history event without free-text values", async () => {
     const { publicId, etag } = await createIssue();
     await patch(`/issues/${publicId}`, { description: "Texte confidentiel à ne jamais journaliser." }, { "If-Match": etag });
 

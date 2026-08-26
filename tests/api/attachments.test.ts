@@ -1,7 +1,7 @@
 import { env } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
 import { app } from "../../worker/index";
-import { jpegFile } from "./support/fixtures";
+import { heicFile, heifFile, jpegFile } from "./support/fixtures";
 
 const EMPLOYEE_HEADER = { "X-Dev-User-Email": "emp@example.test" };
 const MANAGER_HEADER = { "X-Dev-User-Email": "manager@example.test" };
@@ -328,6 +328,83 @@ describe("ATT-01 & ATT-02: Upload et gestion des pièces jointes R2 (S17-S22)", 
     expect(body.error.message).toContain("ne correspond pas");
 
     // Rien n'a été écrit : ni ligne en base, ni objet dans le bucket.
+    const rows = await env.DB.prepare("SELECT COUNT(*) AS n FROM attachments").first<{ n: number }>();
+    expect(rows!.n).toBe(0);
+  });
+
+  /**
+   * S18 / S19 : HEIC et HEIF acceptés.
+   *
+   * `01_produit/06_EXIGENCES_NON_FONCTIONNELLES.md` §Pièces jointes impose
+   * « HEIC/HEIF acceptés côté serveur » : c'est le format par défaut des
+   * photos d'iPhone, donc le cas le plus fréquent d'une déclaration faite
+   * depuis le terrain. Le contrôle de signature ajouté ensuite pouvait très
+   * bien les rejeter sans qu'aucun test ne s'en aperçoive — la liste des
+   * types autorisés était vérifiée, la reconnaissance des octets ne l'était
+   * pas.
+   */
+  it("S18: accepts a genuine HEIC photo", async () => {
+    const { publicId } = await createIssue();
+
+    const formData = new FormData();
+    formData.append("file", heicFile("iphone.heic"));
+
+    const res = await app.request(
+      `http://local/api/issues/${publicId}/attachments`,
+      { method: "POST", headers: EMPLOYEE_HEADER, body: formData },
+      env
+    );
+
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as any;
+    expect(body.data.contentType).toBe("image/heic");
+    expect(body.data.originalName).toBe("iphone.heic");
+  });
+
+  it("S19: accepts a genuine HEIF photo", async () => {
+    const { publicId } = await createIssue();
+
+    const formData = new FormData();
+    formData.append("file", heifFile("iphone.heif"));
+
+    const res = await app.request(
+      `http://local/api/issues/${publicId}/attachments`,
+      { method: "POST", headers: EMPLOYEE_HEADER, body: formData },
+      env
+    );
+
+    expect(res.status).toBe(201);
+    const body = (await res.json()) as any;
+    expect(body.data.contentType).toBe("image/heif");
+  });
+
+  /**
+   * Le conteneur ISO-BMFF ne sert pas qu'aux images : une vidéo MP4 commence
+   * elle aussi par une boîte `ftyp`. Seules les marques d'image doivent
+   * passer, sinon accepter le HEIC reviendrait à accepter tout MP4 renommé.
+   */
+  it("rejects an ISO-BMFF container whose brand is not an image", async () => {
+    const { publicId } = await createIssue();
+
+    const ascii = (text: string) => Array.from(text).map((c) => c.charCodeAt(0));
+    const mp4 = new Uint8Array([
+      0x00, 0x00, 0x00, 0x18,
+      ...ascii("ftyp"),
+      ...ascii("mp42"),
+      0x00, 0x00, 0x00, 0x00,
+      ...ascii("isom"),
+    ]);
+
+    const formData = new FormData();
+    formData.append("file", new File([mp4], "video.heic", { type: "image/heic" }));
+
+    const res = await app.request(
+      `http://local/api/issues/${publicId}/attachments`,
+      { method: "POST", headers: EMPLOYEE_HEADER, body: formData },
+      env
+    );
+
+    expect(res.status).toBe(415);
     const rows = await env.DB.prepare("SELECT COUNT(*) AS n FROM attachments").first<{ n: number }>();
     expect(rows!.n).toBe(0);
   });

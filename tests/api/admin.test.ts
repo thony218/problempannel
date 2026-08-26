@@ -197,8 +197,128 @@ describe("ADM-01 & ADM-02: Endpoints d'Administration", () => {
   });
 });
 
+/**
+ * Scénarios de contrat du référentiel (S26, S27, S28).
+ *
+ * Ils portent moins sur du code que sur la **forme** du contrat : ce qu'il est
+ * possible d'exprimer. Un référentiel mal contraint se répare ensuite à la
+ * main en production, ligne par ligne.
+ */
+describe("Contrat du référentiel (S26, S27, S28)", () => {
+  /** S26 : une sous-catégorie doit toujours désigner sa catégorie parente. */
+  it("S26: rejects a subcategory created without categoryId (422)", async () => {
+    const res = await app.request(
+      "http://local/api/admin/subcategories",
+      {
+        method: "POST",
+        headers: ADMIN_HEADER,
+        body: JSON.stringify({ code: "orphan", label: "Sous-catégorie orpheline" }),
+      },
+      env
+    );
+
+    expect(res.status).toBe(422);
+
+    // Aucune ligne orpheline n'a été créée au passage.
+    const row = await env.DB.prepare(
+      "SELECT COUNT(*) AS n FROM subcategories WHERE code = 'orphan'"
+    ).first<{ n: number }>();
+    expect(row!.n).toBe(0);
+  });
+
+  it("S27: a location sent with a parent field is created without any hierarchy", async () => {
+    const res = await app.request(
+      "http://local/api/admin/locations",
+      {
+        method: "POST",
+        headers: ADMIN_HEADER,
+        body: JSON.stringify({
+          code: "rive_sud",
+          label: "Rive-Sud",
+          parentId: 1,
+          parentLocationId: 1,
+        }),
+      },
+      env
+    );
+
+    // Le champ n'existe pas au contrat : il ne doit en aucun cas produire
+    // une relation. Que la requête soit refusée ou que le champ soit ignoré,
+    // le résultat observable doit être une succursale sans parent.
+    if (res.status === 201) {
+      const body = (await res.json()) as any;
+      expect(body.data.parentId ?? null).toBeNull();
+    } else {
+      expect(res.status).toBe(422);
+    }
+
+    // La table elle-même n'a aucune colonne de parenté.
+    const columns = await env.DB.prepare("PRAGMA table_info(locations)").all<{ name: string }>();
+    expect(columns.results.map((c) => c.name)).not.toContain("parent_id");
+  });
+
+  /**
+   * S28 : « catégorie désactivée absente de Meta, anciens dossiers lisibles ».
+   *
+   * Désactiver une catégorie doit la retirer des choix proposés sans rendre
+   * illisibles les dossiers qui la portent déjà. Confondre les deux
+   * reviendrait à effacer l'historique en réorganisant un référentiel.
+   */
+  it("S28: a deactivated category leaves /meta but keeps existing files readable", async () => {
+    const createRes = await app.request(
+      "http://local/api/issues",
+      {
+        method: "POST",
+        headers: EMPLOYEE_HEADER,
+        body: JSON.stringify({
+          occurredOn: "2026-08-20",
+          locationId,
+          categoryId,
+          description: "Dossier rattaché à une catégorie qui sera désactivée.",
+          priority: "normal",
+          impacts: [{ impactTypeId: impactId, details: null }],
+        }),
+      },
+      env
+    );
+    expect(createRes.status).toBe(201);
+    const publicId = ((await createRes.json()) as any).data.publicId;
+
+    const metaBefore = await app.request("http://local/api/meta", { headers: EMPLOYEE_HEADER }, env);
+    const before = (await metaBefore.json()) as any;
+    expect(before.data.categories.map((c: any) => c.id)).toContain(categoryId);
+
+    const deactivate = await app.request(
+      `http://local/api/admin/categories/${categoryId}`,
+      { method: "PATCH", headers: ADMIN_HEADER, body: JSON.stringify({ active: false }) },
+      env
+    );
+    expect(deactivate.status).toBe(200);
+
+    const metaAfter = await app.request("http://local/api/meta", { headers: EMPLOYEE_HEADER }, env);
+    const after = (await metaAfter.json()) as any;
+    expect(after.data.categories.map((c: any) => c.id)).not.toContain(categoryId);
+
+    // Le dossier existant reste lisible, et porte toujours sa catégorie.
+    const detail = await app.request(`http://local/api/issues/${publicId}`, { headers: EMPLOYEE_HEADER }, env);
+    expect(detail.status).toBe(200);
+    const detailBody = (await detail.json()) as any;
+    expect(detailBody.data.issue.categoryId).toBe(categoryId);
+
+    // Et il reste listable : une catégorie désactivée ne masque pas le passé.
+    const list = await app.request(
+      `http://local/api/issues?categoryId=${categoryId}`,
+      { headers: EMPLOYEE_HEADER },
+      env
+    );
+    expect(list.status).toBe(200);
+    const listBody = (await list.json()) as any;
+    expect(listBody.data.items.map((i: any) => i.publicId)).toContain(publicId);
+  });
+});
+
 describe("V3-PRIV-01: Procédure de Caviardage de données sensibles", () => {
-  it("redacts issue text fields, deletes comments, and purges R2 attachments with clean audit log", async () => {
+  it("S36: redacts issue text fields, deletes comments, and purges R2 attachments with clean audit log", async () => {
     // 1. Créer un incident avec données sensibles
     const createRes = await app.request(
       "http://local/api/issues",
