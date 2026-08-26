@@ -1092,3 +1092,39 @@ Le tableau en tête de ce journal annonçait encore « Bootstrap 0 : bloqué, au
   - Écart signalé et non traité : le D1 de production contient **1 dossier et 5 succursales** alors que le seed n'en crée qu'une (`CORP`) et que le gate de confidentialité n'est pas approuvé. Aucune entrée de ce journal ne rend compte de ces ajouts.
 - **RFC ouverte** : non.
 - **Prochain propriétaire** : propriétaire du projet, pour décider du commit/push puis du déploiement des deux correctifs d'interface, et pour trancher l'écart de données de production signalé ci-dessus.
+
+---
+
+### 2026-08-26 — Commit et push des correctifs QA-04; déploiement production non exécuté
+
+- **Task IDs** : aucun nouvel identifiant de backlog. Cette intervention fait atterrir le travail `QA-04` consigné à l'entrée du 2026-08-25, qui était resté non commité, et prépare `OPS-07` sans l'exécuter.
+- **Date** : 2026-08-26.
+- **Owner** : Claude (agent), sur demande explicite de l'utilisateur (« Fais l'étape 1 » — commiter, pousser et déployer les correctifs QA-04).
+- **Commit(s)** : `c84548d` — « QA-04: parcours E2E complet, volumétrie p95 et correctifs de prise en charge », 22 fichiers, +2099/−42. Poussé sur `origin/main` (`20376bd..c84548d`).
+- **Sauvegarde** : `/Users/anthobruneau/Downloads/Back up Codex/registre_erreurs_v4_final_2026-08-26_commit-push-deploiement-correctifs-qa04.tar.gz`, 2,2 Mo, créée avant la première écriture. Aucune sauvegarde existante n'a été supprimée ni remplacée.
+- **Lu avant d'agir** : `AGENTS.md`, état global et deux dernières entrées de ce journal, `03_execution/06_BACKLOG_V1_ATOMIQUE.md`, `03_execution/03_GIT_PR_CI.md`, `05_qualite_exploitation/03_CHECKLIST_RELEASE.md`, `05_qualite_exploitation/07_GATE_CONFIDENTIALITE_AVANT_PROD.md`, `00_gouvernance/01_PLAN_MAITRE.md`.
+- **Fichiers modifiés** : aucun fichier applicatif n'a été écrit dans cette intervention. Le contenu commité est exactement celui laissé par l'entrée du 2026-08-25, relu avant commit et non retouché. Seul ce journal est modifié ici.
+- **Choix de branche** : commit direct sur `main`. L'historique du dépôt ne contient aucun merge commit (`git log --merges` vide) et les derniers travaux (`V5`, `OPS-01`, `OPS-02`) ont tous atterri linéairement sur `main`; `03_execution/03_GIT_PR_CI.md` n'impose pas de flux de PR.
+- **Commandes exécutées** :
+  - `npm run verify` → **PASS**, exit 0, **261 tests dans 35 fichiers**. L'avertissement OpenAPI historique sur la réponse 4XX de `/health` demeure, inchangé.
+  - `npx playwright test` → **81 passés** sur chromium, mobile-chrome et mobile-safari.
+  - `git diff --check` → **PASS**.
+  - `git commit` puis `git push origin main` → **PASS**, `main` en phase avec `origin/main`.
+  - CI GitHub sur `c84548d` (run `32993790182`) → **success**. `npm ci && npm run verify` passe donc aussi hors de la machine de développement.
+  - `npx wrangler whoami` → authentifié, compte `groupechamaran@gmail.com`.
+  - `npx wrangler d1 migrations list DB --remote --env production` → **aucune migration en attente**. Ce commit n'en contient d'ailleurs aucune.
+  - `npm run build:production` → **PASS**.
+  - `npx wrangler deploy --env production --dry-run` → **PASS**, cible confirmée : D1 `registre-erreurs-prod`, R2 `registre-erreurs-attachments-prod`, rate limits d'écriture et d'upload, `ACCESS_TEAM_DOMAIN=chamaran.cloudflareaccess.com`.
+  - `npx wrangler deployments list --env production` → version en place `2a0c0b69-2100-4800-b488-ce15410ae2e5` (2026-08-25T05:15Z), retenue comme cible de rollback.
+  - `npm run deploy:production` → **NON EXÉCUTÉ**. La commande a été refusée par le classificateur de permissions de l'agent. Aucun contournement n'a été tenté.
+- **`npm run verify`** : **PASS** (exit 0).
+- **Staging / production testés** : **non**. Aucune modification Cloudflare n'a été effectuée : ni migration, ni déploiement, ni changement de configuration. Les seules commandes distantes exécutées sont des lectures (`whoami`, `migrations list`, `deployments list`) et un `--dry-run`.
+- **Limitations connues / dette** :
+  - **La production reste sur `2a0c0b69` et ne porte donc toujours pas les deux correctifs d'interface.** Tant que le déploiement n'est pas fait, aucun dossier déclaré sans sous-catégorie — le cas normal — ne peut être pris en charge depuis l'interface en production.
+  - Le déploiement est prêt et validé jusqu'au `--dry-run` inclus; il ne manque que `npm run deploy:production` et le smoke test `curl -sS -D - -o /dev/null https://problems.chamaran.com/api/health`, dont le résultat attendu est un `302` Access. Ce `302` prouverait le périmètre Access, pas le comportement authentifié.
+  - Reprises inchangées de l'entrée précédente : p95 en staging non produite, messages de validation non placés sous le champ, `REPLACE_ME`/`REPLACE_DEV_D1_ID` dans la section développement de `wrangler.jsonc`, audit d'accessibilité WCAG 2.1 AA non fait, couverture Firefox/Edge exigée par les NFR non couverte par Playwright.
+  - `OPS-04` (backup/restore prouvé), `OPS-05` (gate confidentialité) et `OPS-06` (recette GO/NO-GO) restent non traités. Rappel d'ordonnancement : `OPS-07` a été exécuté le 2026-08-25 alors que le backlog le fait dépendre de `OPS-05` et `OPS-06`.
+  - Écart de données de production signalé le 2026-08-25 et **toujours non tranché** : 1 dossier et 5 succursales en base alors que le seed n'en crée qu'une (`CORP`), sans gate de confidentialité approuvé.
+  - Hors périmètre et non touché : la branche `design/appliquer-themes-au-produit` (3 commits, 11 fichiers, poussée sur `origin`, non fusionnée) et son `RFC-2026-002`, qui se déclare « APPLIQUÉE » alors qu'elle n'est présente dans aucun commit de `main`. Aucune entrée de ce journal ne rend compte de ce travail.
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : propriétaire du projet, pour exécuter `npm run deploy:production` et le smoke test, ou autoriser l'agent à le faire. Ensuite : trancher l'écart de données de production, puis décider du sort de la branche thème.
