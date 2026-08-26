@@ -1128,3 +1128,31 @@ Le tableau en tête de ce journal annonçait encore « Bootstrap 0 : bloqué, au
   - Hors périmètre et non touché : la branche `design/appliquer-themes-au-produit` (3 commits, 11 fichiers, poussée sur `origin`, non fusionnée) et son `RFC-2026-002`, qui se déclare « APPLIQUÉE » alors qu'elle n'est présente dans aucun commit de `main`. Aucune entrée de ce journal ne rend compte de ce travail.
 - **RFC ouverte** : non.
 - **Prochain propriétaire** : propriétaire du projet, pour exécuter `npm run deploy:production` et le smoke test, ou autoriser l'agent à le faire. Ensuite : trancher l'écart de données de production, puis décider du sort de la branche thème.
+
+---
+
+### 2026-08-26 — Déploiement production des correctifs QA-04 (OPS-07)
+
+- **Task IDs** : `OPS-07` (déploiement production). Fait suite à l'entrée précédente du même jour, où le déploiement n'avait pas pu être exécuté.
+- **Date** : 2026-08-26.
+- **Owner** : le propriétaire du projet a exécuté `npm run deploy:production` lui-même, la commande étant refusée à l'agent par le classificateur de permissions. Vérification et consignation par Claude (agent).
+- **Commit(s)** : aucun nouveau commit applicatif. Le code déployé correspond à `c84548d`, l'arbre de travail étant propre et aligné sur `5e3ad17` (qui ne modifie que ce journal) au moment du déploiement.
+- **Sauvegarde** : celle de l'entrée précédente couvre cette intervention (`registre_erreurs_v4_final_2026-08-26_commit-push-deploiement-correctifs-qa04.tar.gz`). Aucun fichier applicatif n'a été écrit depuis.
+- **Cloudflare modifié** : Worker `registre-erreurs` sur `problems.chamaran.com`. Aucune migration, aucun changement D1, R2 ou Access.
+- **Commandes et résultats** :
+  - `npm run deploy:production` (exécuté par le propriétaire) → **PASS**. Nouvelle version **`13185687-bd20-4ae2-b85c-25f6690e7a77`**, créée le 2026-08-26T17:45:47Z, à 100 % du trafic.
+  - `npx wrangler deployments list --env production` → **PASS**, nouvelle version confirmée en tête; version précédente `2a0c0b69-2100-4800-b488-ce15410ae2e5` conservée comme cible de rollback.
+  - `curl -sS -D - -o /dev/null https://problems.chamaran.com/api/health` → **302** vers `chamaran.cloudflareaccess.com`, attendu.
+  - `curl` sur la racine `/` → **302**, attendu.
+  - CI GitHub sur `c84548d` (run `32993790182`) → **success**, rappel de l'entrée précédente.
+- **`npm run verify`** : non relancé; aucune source applicative n'a changé depuis le PASS de l'entrée précédente (261 tests / 35 fichiers).
+- **Staging testé** : **non — il n'existe aucun environnement staging.** Constat établi dans cette intervention : `wrangler.jsonc` ne déclare que le local et `production`. Les tâches `OPS-01` (« Provisionner staging ») et `OPS-02` (« Configurer Access staging ») du backlog ont été cochées le 2026-08-24 par le déploiement du pilote sur `problems.chamaran.com`, c'est-à-dire sur la production. **Le projet n'a donc jamais eu de palier intermédiaire**, alors que `03_execution/03_GIT_PR_CI.md` exige que les E2E passent en staging avant le GO production et que les NFR réclament une p95 mesurée en staging.
+- **Limitations connues / dette** :
+  - **Le `302` ne prouve que le périmètre Access, pas le comportement authentifié.** Les deux correctifs déployés — champ sous-catégorie pour le gestionnaire, remontée des messages de validation — n'ont **jamais été exercés en production**. La recette authentifiée reste à faire, et son premier scénario doit être la prise en charge d'un dossier déclaré sans sous-catégorie, précisément ce qui était bloqué.
+  - Observation relevée au smoke test, non traitée et hors périmètre : l'en-tête `content-security-policy` servi sur `problems.chamaran.com` autorise `cdn.jsdelivr.net`, `*.firebaseio.com`, `identitytoolkit.googleapis.com`, `securetoken.googleapis.com`, `formspree.io`, `*.tile.openstreetmap.org` et `*.basemaps.cartocdn.com`, ainsi que `script-src 'unsafe-inline'`. Cette application n'utilise aucun de ces services. La directive ne provient pas du Worker et semble appliquée au niveau de la zone Cloudflare. À vérifier avant toute ouverture élargie.
+  - `OPS-04` (backup/restore prouvé), `OPS-05` (gate confidentialité) et `OPS-06` (recette GO/NO-GO) restent non traités. `OPS-07` a maintenant été exécuté deux fois sans que `OPS-05` ni `OPS-06`, dont il dépend au backlog, aient été faits.
+  - Écart de données de production signalé le 2026-08-25 et **toujours non tranché** : 1 dossier et 5 succursales en base alors que le seed n'en crée qu'une (`CORP`).
+  - Reprises inchangées : p95 staging non produite, messages de validation non placés sous le champ, `REPLACE_ME`/`REPLACE_DEV_D1_ID` dans la section développement de `wrangler.jsonc`, audit WCAG 2.1 AA non fait, couverture Firefox/Edge absente.
+  - Branche `design/appliquer-themes-au-produit` toujours non fusionnée et non consignée; son `RFC-2026-002` se déclare « APPLIQUÉE » sans être dans `main`.
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : propriétaire du projet, pour exécuter la recette authentifiée sur la production (seul détenteur d'un accès Access), puis pour trancher l'écart de données. Ensuite, provisionner un véritable environnement staging avant la vague de finition groupée (thème + dette d'interface + accessibilité), afin de rendre `OPS-04` et `OPS-06` exécutables et de produire enfin la p95 exigée.
