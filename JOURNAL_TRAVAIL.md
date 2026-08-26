@@ -1182,3 +1182,26 @@ Le tableau en tête de ce journal annonçait encore « Bootstrap 0 : bloqué, au
 - **Limitations connues / dette** : `INC-000001` reste au statut `inProgress`, la transition `inProgress → new` étant **interdite** par `01_produit/03_MATRICE_TRANSITIONS.md`. C'est le comportement voulu, pas un effet de bord réparable. `OPS-04`, `OPS-05` et `OPS-06` restent non traités, ainsi que le staging inexistant relevé plus tôt aujourd'hui.
 - **RFC ouverte** : non.
 - **Prochain propriétaire** : propriétaire du projet, pour trancher les trois points de confidentialité soulevés ci-dessus (Zaraz, données réelles, compte gestionnaire) avant toute ouverture élargie, puis pour décider du provisionnement d'un environnement staging.
+
+---
+
+### 2026-08-26 — Correction : mesure réelle de Zaraz et décision de l'écarter
+
+- **Task IDs** : correction de l'entrée « Recette authentifiée en production des correctifs QA-04 » du même jour. Conformément à la règle de ce journal, l'entrée fautive n'est pas réécrite : celle-ci la précise et l'annule sur ce point.
+- **Date** : 2026-08-26.
+- **Owner** : Claude (agent), sur demande de précision du propriétaire du projet.
+- **Ce que l'entrée précédente affirmait** : « un gestionnaire de balises tierces injecté dans une application qui affiche des incidents nommant des employés ». Cette formulation laisse entendre qu'un flux de données vers des tiers existait. **Elle n'était pas étayée par une mesure** : elle extrapolait à partir d'erreurs de console, sans avoir observé le trafic réseau.
+- **Mesure effectuée depuis** : chargement de `https://problems.chamaran.com/dossiers/INC-000002` dans un navigateur authentifié, relevé exhaustif des requêtes réseau. **8 requêtes**, dont :
+  - 3 vers l'application elle-même (HTML, JS, CSS);
+  - 3 vers l'API du Worker (`/api/me`, `/api/meta`, `/api/issues/INC-000002`);
+  - 1 vers `/cdn-cgi/zaraz/s.js`, **servi depuis le domaine de l'application**, réponse 200;
+  - 1 vers `static.cloudflareinsights.com`, réponse **503** — le script ne se charge pas.
+  - **Aucune requête vers une destination tierce.** La charge utile Zaraz porte `"executed":[]` et `"q":[]` : aucun outil n'est configuré, aucune balise ne s'exécute.
+- **Constat corrigé** : Zaraz est **activé mais vide**. Il transmet à Cloudflare l'URL de la page, son titre, la taille d'écran et le fuseau horaire. L'`EvalError` en console est ce script qui tente un `eval()` bloqué par la CSP : du bruit, sans effet fonctionnel. Il n'y a **pas** de fuite de données vers un tiers.
+- **Risque résiduel, latent et non nul** : l'activation d'un outil dans Zaraz se fait depuis le tableau de bord Cloudflare, sans commit, sans revue et sans trace dans ce dépôt. Le jour où un outil y serait activé, du code tiers s'exécuterait sur des pages dont l'URL identifie un dossier d'incident. Rien de tel n'est configuré aujourd'hui.
+- **Décision du propriétaire du projet** : **laisser Zaraz en l'état**, sans le désactiver. Décision prise en connaissance de la mesure et du risque latent ci-dessus.
+- **Conséquence pour `OPS-05`** : ce point est instruit et tranché. Il n'a pas à rester ouvert au gate de confidentialité; le risque latent y est consigné pour mémoire.
+- **Ce qui n'est pas corrigé et reste valide dans l'entrée précédente** : la présence de vraies données d'exploitation nommant deux employés dans la production (`INC-000002`, `INC-000003`), et l'existence d'un compte au rôle `MANAGER` non consigné. Ces deux points demeurent ouverts et relèvent toujours de `OPS-05`.
+- **`npm run verify`** : sans objet, aucune source applicative touchée.
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : propriétaire du projet, pour les deux points de confidentialité restants.
