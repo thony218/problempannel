@@ -1156,3 +1156,29 @@ Le tableau en tête de ce journal annonçait encore « Bootstrap 0 : bloqué, au
   - Branche `design/appliquer-themes-au-produit` toujours non fusionnée et non consignée; son `RFC-2026-002` se déclare « APPLIQUÉE » sans être dans `main`.
 - **RFC ouverte** : non.
 - **Prochain propriétaire** : propriétaire du projet, pour exécuter la recette authentifiée sur la production (seul détenteur d'un accès Access), puis pour trancher l'écart de données. Ensuite, provisionner un véritable environnement staging avant la vague de finition groupée (thème + dette d'interface + accessibilité), afin de rendre `OPS-04` et `OPS-06` exécutables et de produire enfin la p95 exigée.
+
+---
+
+### 2026-08-26 — Recette authentifiée en production des correctifs QA-04
+
+- **Task IDs** : recette authentifiée exigée depuis le 2026-08-25, jamais exécutée. Contribue à `OPS-06` sans le clore.
+- **Date** : 2026-08-26.
+- **Owner** : Claude (agent), pilotant Chrome via l'extension, sur une session Cloudflare Access ouverte par le propriétaire du projet (l'agent n'a saisi aucun identifiant et n'a jamais eu accès au code de connexion).
+- **Commit(s)** : aucun commit applicatif. Version en production inchangée : `13185687-bd20-4ae2-b85c-25f6690e7a77`.
+- **Sauvegarde** : sans objet, aucune écriture de fichier applicatif. Les seules écritures sont des données de production décrites ci-dessous.
+- **Données de production modifiées** : `INC-000001` (« Test 12365654165 »), dossier d'essai préexistant, passé de `new` à `inProgress`. Un événement d'historique `issue_updated {"fields":["status"]}` a été écrit. Aucun autre dossier n'a été touché; aucun dossier n'a été créé.
+- **Scénarios joués et résultats** :
+  1. **Sélecteur de sous-catégorie côté gestionnaire** → **PASS**. La modale d'édition de `INC-000001` expose bien « Catégorie » et « Sous-catégorie » dans la section gestionnaire, avec la mention « Requise pour faire sortir le dossier du statut « Nouveau ». ». C'était l'objet du premier correctif; le champ était absent avant le déploiement.
+  2. **Refus documenté** → **PASS**. Sous-catégorie vidée (« -- À confirmer -- ») + statut « En cours » → refus affichant **« Sous-catégorie requise pour sortir du statut 'new'. »**, c'est-à-dire le message `error.fields` du serveur et non le « Validation échouée. » générique. Le label « Sous-catégorie » prend son astérisque de champ requis dès que le statut quitte « Nouveau ».
+  3. **Prise en charge effective** → **PASS**. Sous-catégorie rétablie, enregistrement accepté, dossier passé à **EN COURS**, modale fermée, détail rafraîchi. **Le blocage constaté le 2026-08-25 est donc levé en production.**
+  4. **Historique** → **PASS**. Un **seul** événement écrit pour ce PATCH, portant exactement `{"fields":["status"]}`. L'écriture est bien atomique et ne consigne que le champ réellement modifié.
+- **Constats nouveaux, non traités, hors périmètre de cette recette** :
+  - **Cloudflare Zaraz est actif sur le domaine.** Chaque page charge `/cdn-cgi/zaraz/s.js`, qui lève une `EvalError` bloquée par la CSP (`'unsafe-eval'` non autorisé) sur les quatre écrans visités. Deux conséquences : des exceptions permanentes en console, et surtout **un gestionnaire de balises tierces injecté dans une application qui affiche des incidents nommant des employés**. Cela relève directement du point « circulation / localisation / fournisseurs évalués » du gate `OPS-05` et doit être tranché avant toute ouverture.
+  - **La production contient de vraies données d'exploitation.** `INC-000002` et `INC-000003` décrivent des incidents réels, **nomment deux employés** en texte libre, citent un produit et une perte de 300 $. `05_qualite_exploitation/07_GATE_CONFIDENTIALITE_AVANT_PROD.md` interdit explicitement les données réelles tant que le gate n'est pas approuvé, et proscrit la communication de données RH sensibles. Le registre compte donc **3 dossiers** et non 1, et l'écart signalé les 25 et 26 août est plus large qu'estimé.
+  - **Troisième compte utilisateur non consigné** : un compte au rôle `MANAGER` (`MAV`) existe en plus des deux administrateurs promus le 2026-08-24. Aucune entrée de ce journal n'en rend compte. Ce rôle donne accès aux dossiers ci-dessus.
+  - **Fuite de libellé technique** : le message de refus affiche `statut 'new'`, la valeur brute de l'énumération, au lieu du libellé « Nouveau ». `01_produit/ux/05_ETATS_ET_MESSAGES.md` attend un message destiné à l'utilisateur. Défaut mineur, à corriger côté serveur avec les messages de validation.
+  - Rappel : le placement des messages de validation **sous le champ** reste non fait; ils s'affichent dans le bandeau de la modale.
+- **`npm run verify`** : non relancé; aucune source applicative n'a changé depuis le PASS du jour (261 tests / 35 fichiers).
+- **Limitations connues / dette** : `INC-000001` reste au statut `inProgress`, la transition `inProgress → new` étant **interdite** par `01_produit/03_MATRICE_TRANSITIONS.md`. C'est le comportement voulu, pas un effet de bord réparable. `OPS-04`, `OPS-05` et `OPS-06` restent non traités, ainsi que le staging inexistant relevé plus tôt aujourd'hui.
+- **RFC ouverte** : non.
+- **Prochain propriétaire** : propriétaire du projet, pour trancher les trois points de confidentialité soulevés ci-dessus (Zaraz, données réelles, compte gestionnaire) avant toute ouverture élargie, puis pour décider du provisionnement d'un environnement staging.
